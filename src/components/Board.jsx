@@ -29,8 +29,7 @@ export default function Board({
           boardOrientation: playerColor,
           arrows: convertArrows(arrows),
           squareStyles: squareStyles,
-          clearArrowsOnPositionChange: false,
-          clearArrowsOnClick: false,
+          allowDrawingArrows: false,
           boardStyle: {
             borderRadius: '4px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
