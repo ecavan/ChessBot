@@ -8,7 +8,7 @@ import BlunderAlert from '../components/BlunderAlert';
 import GameControls from '../components/GameControls';
 import { classifyMove } from '../engine/analysis';
 import { generateHint } from '../engine/hints';
-import { getThreats } from '../utils/arrows';
+import { getThreats, getPlayerThreats } from '../utils/arrows';
 import { OPENINGS } from '../data/openings';
 
 function uciToSan(uci, fen) {
@@ -94,6 +94,7 @@ export default function PlayMode({ engine, onGameEnd }) {
     skillLevel: 5,
     blunderWarnings: true,
     showThreats: true,
+    showPlayerThreats: false,
     showEval: true,
     hintsAvailable: true,
     playerColor: 'white',
@@ -474,10 +475,6 @@ export default function PlayMode({ engine, onGameEnd }) {
     return () => window.removeEventListener('keydown', handler);
   }, [isThinking, gameOver, hintLevel, settings.hintsAvailable, handleRequestHint]);
 
-  // Compute threat arrows
-  const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
-  const allArrows = [...arrows, ...threatArrows];
-
   // Store current eval for classification
   useEffect(() => {
     if (engineEval !== null) {
@@ -487,6 +484,12 @@ export default function PlayMode({ engine, onGameEnd }) {
 
   const isPlayerTurn = (gameRef.current.turn() === 'w' && boardOrientation === 'white') ||
                        (gameRef.current.turn() === 'b' && boardOrientation === 'black');
+
+  // Compute threat arrows
+  const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
+  const playerThreatArrows = settings.showPlayerThreats && isPlayerTurn
+    ? getPlayerThreats(gameRef.current) : [];
+  const allArrows = [...arrows, ...threatArrows, ...playerThreatArrows];
 
   const currentDifficulty = DIFFICULTIES.find(
     (d) => d.skill === settings.skillLevel && d.depth === settings.engineDepth

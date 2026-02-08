@@ -18,3 +18,17 @@ export function getThreats(game) {
     return [];
   }
 }
+
+export function getPlayerThreats(game) {
+  try {
+    const threats = [];
+    for (const move of game.moves({ verbose: true })) {
+      if (move.captured) {
+        threats.push([move.from, move.to, 'rgba(255, 165, 0, 0.6)']);
+      }
+    }
+    return threats;
+  } catch {
+    return [];
+  }
+}
