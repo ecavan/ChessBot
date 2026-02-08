@@ -140,10 +140,11 @@ export default function ReviewMode({ engine, initialPgn }) {
       setAnalysis(results);
       setProgress(100);
 
-      // Show first position
+      // Show first position (after first move, matching navigateToMove behavior)
       if (results.length > 0) {
         displayGameRef.current = new Chess(results[0].fen);
-        setDisplayFen(results[0].fen);
+        displayGameRef.current.move(results[0].san);
+        setDisplayFen(displayGameRef.current.fen());
         setCurrentIndex(0);
         if (results[0].bestMove) {
           const from = results[0].bestMove.slice(0, 2);
@@ -193,12 +194,10 @@ export default function ReviewMode({ engine, initialPgn }) {
   const handleExploreMove = useCallback((from, to) => {
     if (!analysis) return false;
 
-    // If not exploring yet, start from the current analysis position
+    // If not exploring yet, start from the currently displayed position
     let game;
     if (!isExploring) {
-      const entry = analysis[currentIndex];
-      game = new Chess(entry.fen);
-      game.move(entry.san); // replay the actual move first
+      game = new Chess(displayGameRef.current.fen());
       exploreGameRef.current = game;
     } else {
       game = exploreGameRef.current;
@@ -221,7 +220,7 @@ export default function ReviewMode({ engine, initialPgn }) {
     engineAnalyze(game.fen(), 14);
 
     return true;
-  }, [analysis, isExploring, currentIndex, engineAnalyze]);
+  }, [analysis, isExploring, engineAnalyze]);
 
   const handleExploreUndo = useCallback(() => {
     if (!isExploring || exploreMoves.length === 0) return;

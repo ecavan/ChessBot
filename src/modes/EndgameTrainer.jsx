@@ -6,6 +6,7 @@ import MoveList from '../components/MoveList';
 import HintPanel from '../components/HintPanel';
 import { generateHint } from '../engine/hints';
 import { ENDGAMES } from '../data/endgames';
+import { playMoveSound, sounds } from '../utils/sounds';
 
 const DIFFICULTY_STYLES = {
   beginner: 'bg-green-900 text-green-300',
@@ -97,6 +98,7 @@ export default function EndgameTrainer({ engine }) {
       try {
         const move = game.move({ from, to, promotion });
         if (move) {
+          playMoveSound(game, move);
           setHistory((prev) => [...prev, { san: move.san, classification: null }]);
           setFen(game.fen());
 
@@ -123,6 +125,7 @@ export default function EndgameTrainer({ engine }) {
     }
     if (!move) return false;
 
+    playMoveSound(game, move);
     setHistory((prev) => [...prev, { san: move.san, classification: null }]);
     setMoveCount((prev) => prev + 1);
     setFen(game.fen());
@@ -134,10 +137,12 @@ export default function EndgameTrainer({ engine }) {
     // Check success
     if (endgame?.goal === 'checkmate' && game.isCheckmate()) {
       setSuccess(true);
+      sounds.success();
       return true;
     }
     if (endgame?.goal === 'promotion' && move.promotion) {
       setSuccess(true);
+      sounds.success();
       return true;
     }
 

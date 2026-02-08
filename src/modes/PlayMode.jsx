@@ -10,6 +10,7 @@ import { classifyMove } from '../engine/analysis';
 import { generateHint } from '../engine/hints';
 import { getThreats, getPlayerThreats } from '../utils/arrows';
 import { OPENINGS } from '../data/openings';
+import { playMoveSound } from '../utils/sounds';
 
 function uciToSan(uci, fen) {
   try {
@@ -198,6 +199,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
 
       const move = game.move({ from, to, promotion });
       if (move) {
+        playMoveSound(game, move);
         // Track engine UCI move for book detection
         uciHistoryRef.current = [...uciHistoryRef.current, result.move];
 
@@ -246,6 +248,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     }
     if (!move) return false;
 
+    playMoveSound(game, move);
     const isWhite = move.color === 'w';
     const uci = from + to + (move.promotion || '');
 

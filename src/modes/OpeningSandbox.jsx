@@ -6,6 +6,7 @@ import MoveList from '../components/MoveList';
 import HintPanel from '../components/HintPanel';
 import { OPENINGS } from '../data/openings';
 import { generateHint } from '../engine/hints';
+import { playMoveSound } from '../utils/sounds';
 
 export default function OpeningSandbox({ engine }) {
   // Destructure engine: functions are stable, reactive values change
@@ -48,6 +49,7 @@ export default function OpeningSandbox({ engine }) {
     try {
       const move = game.move({ from, to, promotion });
       if (move) {
+        playMoveSound(game, move);
         setHistory((prev) => [...prev, { san: move.san, classification: null }]);
         setFen(game.fen());
         return move;
@@ -69,6 +71,7 @@ export default function OpeningSandbox({ engine }) {
       try {
         const move = gameRef.current.move({ from, to, promotion });
         if (move) {
+          playMoveSound(gameRef.current, move);
           setHistory((prev) => [...prev, { san: move.san, classification: null }]);
           setFen(gameRef.current.fen());
         }
@@ -134,6 +137,7 @@ export default function OpeningSandbox({ engine }) {
 
       if (uci === expectedMove) {
         // Correct book move
+        playMoveSound(game, move);
         setSquareStyles({
           [from]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
           [to]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
@@ -184,6 +188,7 @@ export default function OpeningSandbox({ engine }) {
       }
     } else {
       // Free play phase
+      playMoveSound(game, move);
       setHistory((prev) => [...prev, { san: move.san, classification: null }]);
       setFen(game.fen());
       setFeedback(null);

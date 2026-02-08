@@ -4,11 +4,13 @@ import PlayMode from './modes/PlayMode';
 import OpeningSandbox from './modes/OpeningSandbox';
 import ReviewMode from './modes/ReviewMode';
 import EndgameTrainer from './modes/EndgameTrainer';
+import PuzzlesTrainer from './modes/PuzzlesTrainer';
 
 const MODES = [
   { key: 'play', label: 'Play' },
   { key: 'openings', label: 'Openings' },
   { key: 'endgames', label: 'Endgames' },
+  { key: 'puzzles', label: 'Puzzles' },
   { key: 'review', label: 'Review' },
 ];
 
@@ -71,6 +73,9 @@ export default function App() {
         )}
         {activeMode === 'endgames' && (
           <EndgameTrainer engine={engine} />
+        )}
+        {activeMode === 'puzzles' && (
+          <PuzzlesTrainer engine={engine} />
         )}
         {activeMode === 'review' && (
           <ReviewMode engine={engine} initialPgn={lastGamePgn} />
