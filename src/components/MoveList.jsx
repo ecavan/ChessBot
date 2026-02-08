@@ -38,8 +38,13 @@ export default function MoveList({ history, currentMoveIndex, onMoveClick }) {
               onClick={() => onMoveClick?.(row.whiteIndex)}
               className={`px-1 rounded hover:bg-gray-600 transition-colors ${
                 currentMoveIndex === row.whiteIndex ? 'bg-gray-600' : ''
-              }`}
-              style={{ color: row.white.classification?.color || '#fff' }}
+              } ${row.white.classification?.type === 'brilliant' ? 'font-bold' : ''}`}
+              style={{
+                color: row.white.classification?.color || '#fff',
+                ...(row.white.classification?.type === 'brilliant' ? {
+                  textShadow: '0 0 8px rgba(38,198,218,0.6)',
+                } : {}),
+              }}
             >
               {row.white.san}
               {row.white.classification?.symbol && (
@@ -52,8 +57,13 @@ export default function MoveList({ history, currentMoveIndex, onMoveClick }) {
               onClick={() => onMoveClick?.(row.blackIndex)}
               className={`px-1 rounded hover:bg-gray-600 transition-colors ${
                 currentMoveIndex === row.blackIndex ? 'bg-gray-600' : ''
-              }`}
-              style={{ color: row.black.classification?.color || '#fff' }}
+              } ${row.black.classification?.type === 'brilliant' ? 'font-bold' : ''}`}
+              style={{
+                color: row.black.classification?.color || '#fff',
+                ...(row.black.classification?.type === 'brilliant' ? {
+                  textShadow: '0 0 8px rgba(38,198,218,0.6)',
+                } : {}),
+              }}
             >
               {row.black.san}
               {row.black.classification?.symbol && (

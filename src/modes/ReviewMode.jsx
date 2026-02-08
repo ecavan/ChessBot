@@ -75,14 +75,23 @@ export default function ReviewMode({ engine, initialPgn }) {
       const bestMoveUci = resultBefore?.move ?? '';
 
       // Make the actual move
-      replay.move(moves[i].san);
+      const playedMove = replay.move(moves[i].san);
       const fenAfter = replay.fen();
 
       // Get engine eval after the move
       const resultAfter = await engineGetBestMove(fenAfter, 12);
       const evalAfter = resultAfter?.eval ?? 0;
 
-      const classification = classifyMove(evalBefore, evalAfter, isWhite);
+      const playerUci = moves[i].from + moves[i].to + (moves[i].promotion || '');
+      const classification = classifyMove(evalBefore, evalAfter, isWhite, playedMove ? {
+        piece: playedMove.piece,
+        captured: playedMove.captured,
+        to: playedMove.to,
+        color: playedMove.color,
+        gameAfter: replay,
+        playerUci,
+        bestUci: bestMoveUci,
+      } : undefined);
       const bestMoveSan = uciToSan(bestMoveUci, fenBefore);
       const explanation = explainMove(classification, bestMoveSan);
 
@@ -103,11 +112,15 @@ export default function ReviewMode({ engine, initialPgn }) {
     }
 
     if (!cancelRef.current) {
+      const brilliancies = results.filter((r) => r.classification.type === 'brilliant').length;
+      const best = results.filter((r) => r.classification.type === 'best').length;
+      const great = results.filter((r) => r.classification.type === 'great').length;
       const blunders = results.filter((r) => r.classification.type === 'blunder').length;
       const mistakes = results.filter((r) => r.classification.type === 'mistake').length;
+      const misses = results.filter((r) => r.classification.type === 'miss').length;
       const inaccuracies = results.filter((r) => r.classification.type === 'inaccuracy').length;
 
-      setSummary({ blunders, mistakes, inaccuracies, totalMoves: moves.length });
+      setSummary({ brilliancies, best, great, blunders, mistakes, misses, inaccuracies, totalMoves: moves.length });
       setAnalysis(results);
       setProgress(100);
 

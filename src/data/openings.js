@@ -341,4 +341,174 @@ export const OPENINGS = {
       'Works at every level — even GMs must know the defense!',
     ],
   },
+  scandinavian_defense: {
+    name: 'Scandinavian Defense',
+    color: 'black',
+    moves: ['e2e4', 'd7d5', 'e4d5', 'd8d5', 'b1c3', 'd5a5', 'd2d4', 'g8f6', 'g1f3', 'c8f5', 'f1c4', 'e7e6'],
+    deviations: {
+      'e2e4 d7d5 e4d5 g8f6': {
+        explanation: "This is the Scandinavian with ...Nf6 (the Modern variation). While solid, ...Qxd5 is the classical Scandi — the queen comes out early but it works! She retreats to a5 with purpose.",
+        bookResponse: 'd2d4',
+      },
+      'e2e4 d7d5 e4d5 d8d5 b1c3 d5d8': {
+        explanation: "Retreating to d8 wastes the tempo you gained. ...Qa5 is the best square — it's safe from attack, eyes the e1-a5 diagonal, and supports future ...c6 or ...Bb4 ideas.",
+        bookResponse: 'd2d4',
+      },
+      'e2e4 d7d5 e4d5 d8d5 b1c3 d5d6': {
+        explanation: "...Qd6 is playable but blocks your d-pawn and bishop development. ...Qa5 is more natural — the queen is active and out of the way.",
+        bookResponse: 'd2d4',
+      },
+    },
+    principles: [
+      'Strike the center immediately with ...d5 on move 1',
+      'The queen comes out early but retreats to a safe, active square on a5',
+      'Develop the light-squared bishop to f5 BEFORE playing ...e6',
+      'Build a solid structure with ...e6, ...c6, ...Bd6 or ...Bc5',
+      'The Scandi is a great practical weapon — easy to play, hard to refute',
+    ],
+  },
+  elephant_gambit: {
+    name: 'Elephant Gambit',
+    color: 'black',
+    moves: ['e2e4', 'e7e5', 'g1f3', 'd7d5', 'e4d5', 'e5e4', 'f3e5', 'g8f6', 'd2d3', 'f8d6'],
+    deviations: {
+      'e2e4 e7e5 g1f3 d7d5 e4d5 d8d5': {
+        explanation: "Recapturing with the queen is natural but gives White easy development with Nc3. The gambit idea is ...e4! — pushing the pawn forward to kick the knight and seize space.",
+        bookResponse: 'b1c3',
+      },
+      'e2e4 e7e5 g1f3 d7d5 e4d5 e5e4 f3e5 f8d6': {
+        explanation: "Developing the bishop first is tempting but ...Nf6 is more accurate — it develops with tempo, threatens the d5 pawn, and prepares rapid development.",
+        bookResponse: 'd2d4',
+      },
+    },
+    principles: [
+      'Surprise! ...d5 on move 2 sacrifices a pawn for rapid development',
+      'After exd5, push ...e4! — the key move, attacking the knight',
+      'Develop quickly: ...Nf6, ...Bd6, ...O-O with active piece play',
+      'Black gets excellent development compensation for the pawn',
+      'A great surprise weapon — most opponents will be out of book immediately',
+    ],
+  },
+  englund_gambit: {
+    name: 'Englund Gambit',
+    color: 'black',
+    moves: ['d2d4', 'e7e5', 'd4e5', 'b8c6', 'g1f3', 'd8e7', 'c1f4', 'e7b4', 'f4d2', 'b4b2'],
+    deviations: {
+      'd2d4 e7e5 d4e5 d7d6': {
+        explanation: "...d6 tries to recover the pawn directly but leads to a boring position. ...Nc6 is the gambit way — develop fast and create threats! The queen will come to e7 with pressure.",
+        bookResponse: 'e5d6',
+      },
+      'd2d4 e7e5 d4e5 b8c6 g1f3 g8e7': {
+        explanation: "...Nge7 develops but misses the key idea. ...Qe7 pins the e5 pawn to the king! After Bf4, ...Qb4+ wins the b2 pawn with a discovered trick.",
+        bookResponse: 'c1f4',
+      },
+      'd2d4 e7e5 d4e5 b8c6 g1f3 d8e7 c1f4 d7d6': {
+        explanation: "...d6 recovers the pawn but misses the trap. ...Qb4+! is the star move — it forces Bd2 and then ...Qxb2 grabs the b-pawn with a playable position.",
+        bookResponse: 'e5d6',
+      },
+    },
+    principles: [
+      '1...e5!? is a shock weapon against 1.d4 — most d4 players are unprepared',
+      'After dxe5, develop the knight to c6 and queen to e7',
+      'The key trick: ...Qb4+ forces Bd2, then ...Qxb2 wins a pawn',
+      'Not objectively best, but practically very effective at club level',
+      'Play for rapid development and tactical chances',
+    ],
+  },
+  stafford_gambit: {
+    name: 'Stafford Gambit',
+    color: 'black',
+    moves: ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f3e5', 'b8c6', 'e5c6', 'd7c6', 'd2d3', 'f8c5'],
+    deviations: {
+      'e2e4 e7e5 g1f3 g8f6 f3e5 b8c6 e5f3': {
+        explanation: "White retreated! That's actually the safe line. But in practice, most players play Nxc6 — that's what we're drilling. After Nxc6 dxc6, Black gets rapid development.",
+        bookResponse: 'e2e4',
+      },
+      'e2e4 e7e5 g1f3 g8f6 f3e5 f6e4': {
+        explanation: "...Nxe4 is the safe Petrov continuation. But ...Nc6! is the Stafford Gambit — you sacrifice the pawn for a ferocious attack! After Nxc6 dxc6, your pieces fly out.",
+        bookResponse: 'd2d4',
+      },
+    },
+    principles: [
+      'Sacrifice the e5 pawn to get explosive development',
+      'After Nxc6 dxc6, develop ...Bc5 targeting f2',
+      'Common traps: ...Ng4 threatening ...Qh4 and ...Nxf2 forks',
+      'Made famous by Eric Rosen — packed with deadly traps',
+      'Even if White plays accurately, Black gets practical attacking chances',
+    ],
+  },
+  kings_gambit: {
+    name: "King's Gambit",
+    color: 'white',
+    moves: ['e2e4', 'e7e5', 'f2f4', 'e5f4', 'g1f3', 'g7g5', 'h2h4', 'g5g4', 'f3e5'],
+    deviations: {
+      'e2e4 e7e5 f2f4 d7d5': {
+        explanation: "This is the Falkbeer Counter-Gambit! Bold, but we're studying the King's Gambit Accepted. After ...exf4, Black grabs the pawn and White gets a strong center + open f-file.",
+        bookResponse: 'e4d5',
+      },
+      'e2e4 e7e5 f2f4 f8c5': {
+        explanation: "The King's Gambit Declined with ...Bc5. Solid but passive. We're drilling the Accepted line where Black takes exf4 and tries to hold the extra pawn.",
+        bookResponse: 'g1f3',
+      },
+      'e2e4 e7e5 f2f4 e5f4 g1f3 d7d6': {
+        explanation: "...d6 is solid but gives White an easy game. ...g5! is the fighting move — Black defends the f4 pawn and prepares ...g4 to kick the knight. This is the classic King's Gambit battle.",
+        bookResponse: 'd2d4',
+      },
+    },
+    principles: [
+      'f4 sacrifices a pawn for rapid central control and the open f-file',
+      'The most romantic opening in chess — used by Morphy, Anderssen, and Tal',
+      'After exf4, Nf3 develops and prevents ...Qh4+',
+      'Black tries to hold the pawn with ...g5; White attacks with h4',
+      'Ne5 is a powerful outpost — White gets a dangerous initiative',
+    ],
+  },
+  evans_gambit: {
+    name: 'Evans Gambit',
+    color: 'white',
+    moves: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5', 'b2b4', 'c5b4', 'c2c3', 'b4a5', 'd2d4', 'e5d4', 'e1g1'],
+    deviations: {
+      'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4 c5b4 c2c3 b4c5': {
+        explanation: "...Bc5 retreats but gives White a strong center after d4. ...Ba5 is the main line — the bishop stays active on the diagonal and can retreat to b6 later.",
+        bookResponse: 'd2d4',
+      },
+      'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4 c5b4 c2c3 b4e7': {
+        explanation: "...Be7 is too passive. ...Ba5 maintains pressure. The Evans is all about activity — don't be timid, keep pieces on aggressive squares!",
+        bookResponse: 'd2d4',
+      },
+      'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4 c5b4 c2c3 b4a5 d2d4 d7d6': {
+        explanation: "...d6 is solid but lets White build a massive center. ...exd4 is the principled response — accept the gambit and try to survive the attack!",
+        bookResponse: 'd1b3',
+      },
+    },
+    principles: [
+      'b4! sacrifices a pawn to deflect the Black bishop and build a huge center',
+      'After c3 and d4, White has pawns on e4 and d4 with open lines',
+      'Castle quickly (O-O) and launch an attack with rapid development',
+      'Kasparov used the Evans Gambit to beat Anand — it works at any level!',
+      'A favorite of Bobby Fischer and other aggressive players',
+    ],
+  },
+  budapest_gambit: {
+    name: 'Budapest Gambit',
+    color: 'black',
+    moves: ['d2d4', 'g8f6', 'c2c4', 'e7e5', 'd4e5', 'f6g4', 'c1f4', 'b8c6', 'g1f3', 'f8b4', 'b1d2', 'd8e7'],
+    deviations: {
+      'd2d4 g8f6 c2c4 e7e5 d4e5 f6e4': {
+        explanation: "...Ne4 (the Fajarowicz) is a different gambit entirely. ...Ng4! is the Budapest — the knight attacks e5 and prepares ...Bc5 or ...Bb4+ with active piece play.",
+        bookResponse: 'a2a3',
+      },
+      'd2d4 g8f6 c2c4 e7e5 d4e5 f6g4 c1f4 g7g5': {
+        explanation: "...g5 tries to win the bishop but weakens the kingside too much. ...Nc6 is the main line — develop pieces and put pressure on e5 before committing pawns.",
+        bookResponse: 'f4g3',
+      },
+    },
+    principles: [
+      '2...e5!? shocks d4 players — most are not prepared for this gambit',
+      'After dxe5, ...Ng4 attacks the e5 pawn immediately',
+      'Develop actively: ...Bb4+, ...Nc6, ...Qe7 all pressure e5',
+      'Black often regains the pawn with a comfortable position',
+      'A practical surprise weapon against 1.d4 2.c4 players',
+    ],
+  },
 };

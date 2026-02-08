@@ -27,10 +27,22 @@ export default function ReviewPanel({ analysis, currentIndex, onNavigate, summar
   return (
     <div className="bg-gray-800 rounded p-3">
       {summary && (
-        <div className="flex gap-4 mb-3 pb-2 border-b border-gray-700 text-sm">
+        <div className="flex gap-3 mb-3 pb-2 border-b border-gray-700 text-xs flex-wrap">
+          {summary.brilliancies > 0 && (
+            <span style={{ color: '#26c6da' }}>{summary.brilliancies} brilliant</span>
+          )}
+          {summary.best > 0 && (
+            <span style={{ color: '#96bc4b' }}>{summary.best} best</span>
+          )}
+          {summary.great > 0 && (
+            <span style={{ color: '#5dadec' }}>{summary.great} great</span>
+          )}
           <span className="text-red-400">{summary.blunders} blunders</span>
           <span className="text-orange-400">{summary.mistakes} mistakes</span>
-          <span className="text-yellow-400">{summary.inaccuracies} inaccuracies</span>
+          {summary.misses > 0 && (
+            <span className="text-orange-400">{summary.misses} misses</span>
+          )}
+          <span style={{ color: '#f7c631' }}>{summary.inaccuracies} inaccuracies</span>
         </div>
       )}
 
@@ -43,8 +55,13 @@ export default function ReviewPanel({ analysis, currentIndex, onNavigate, summar
                 onClick={() => onNavigate(row.whiteIndex)}
                 className={`px-1 rounded hover:bg-gray-600 transition-colors ${
                   currentIndex === row.whiteIndex ? 'bg-gray-600' : ''
-                }`}
-                style={{ color: row.white.classification?.color || '#fff' }}
+                } ${row.white.classification?.type === 'brilliant' ? 'font-bold' : ''}`}
+                style={{
+                  color: row.white.classification?.color || '#fff',
+                  ...(row.white.classification?.type === 'brilliant' ? {
+                    textShadow: '0 0 8px rgba(38,198,218,0.6)',
+                  } : {}),
+                }}
               >
                 {row.white.san}
                 {row.white.classification?.symbol && (
@@ -57,8 +74,13 @@ export default function ReviewPanel({ analysis, currentIndex, onNavigate, summar
                 onClick={() => onNavigate(row.blackIndex)}
                 className={`px-1 rounded hover:bg-gray-600 transition-colors ${
                   currentIndex === row.blackIndex ? 'bg-gray-600' : ''
-                }`}
-                style={{ color: row.black.classification?.color || '#fff' }}
+                } ${row.black.classification?.type === 'brilliant' ? 'font-bold' : ''}`}
+                style={{
+                  color: row.black.classification?.color || '#fff',
+                  ...(row.black.classification?.type === 'brilliant' ? {
+                    textShadow: '0 0 8px rgba(38,198,218,0.6)',
+                  } : {}),
+                }}
               >
                 {row.black.san}
                 {row.black.classification?.symbol && (

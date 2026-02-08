@@ -9,6 +9,7 @@ import GameControls from '../components/GameControls';
 import { classifyMove } from '../engine/analysis';
 import { generateHint } from '../engine/hints';
 import { getThreats } from '../utils/arrows';
+import { OPENINGS } from '../data/openings';
 
 function uciToSan(uci, fen) {
   try {
@@ -47,6 +48,15 @@ function pvToSan(uciMoves, fen, maxMoves = 5) {
   } catch {
     return '';
   }
+}
+
+// Check if the full UCI sequence matches any known opening prefix
+const openingValues = Object.values(OPENINGS);
+function isBookMove(uciHistory) {
+  return openingValues.some((opening) => {
+    if (uciHistory.length > opening.moves.length) return false;
+    return uciHistory.every((m, i) => m === opening.moves[i]);
+  });
 }
 
 const DIFFICULTIES = [
@@ -97,10 +107,14 @@ export default function PlayMode({ engine, onGameEnd }) {
   const [blunderAlert, setBlunderAlert] = useState(null);
   const [gameOver, setGameOver] = useState(null);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+  const [brilliantFlash, setBrilliantFlash] = useState(false);
+  const [moveIndicator, setMoveIndicator] = useState(null);
+  const [indicatorKey, setIndicatorKey] = useState(0);
   const evalBeforeRef = useRef(null);
   const isThinkingRef = useRef(false);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const uciHistoryRef = useRef([]);
 
   const actualColor = settings.playerColor === 'random'
     ? (Math.random() < 0.5 ? 'white' : 'black')
@@ -147,6 +161,11 @@ export default function PlayMode({ engine, onGameEnd }) {
     return false;
   }, [onGameEnd]);
 
+  const showIndicator = useCallback((classification) => {
+    setMoveIndicator(classification);
+    setIndicatorKey((k) => k + 1);
+  }, []);
+
   const makeEngineMove = useCallback(async () => {
     if (isThinkingRef.current) return;
     isThinkingRef.current = true;
@@ -178,6 +197,9 @@ export default function PlayMode({ engine, onGameEnd }) {
 
       const move = game.move({ from, to, promotion });
       if (move) {
+        // Track engine UCI move for book detection
+        uciHistoryRef.current = [...uciHistoryRef.current, result.move];
+
         setHistory((prev) => [...prev, {
           san: move.san,
           fen: game.fen(),
@@ -205,9 +227,6 @@ export default function PlayMode({ engine, onGameEnd }) {
     }
   }, [engineReady, boardOrientation, history.length, makeEngineMove]);
 
-  // Always commit the player's move immediately (return true so the piece stays).
-  // Then optionally run the blunder check. If it's a blunder, show the alert.
-  // The engine only moves after the blunder check clears.
   const handleMove = useCallback((from, to) => {
     if (isThinkingRef.current || blunderAlert) return false;
 
@@ -227,6 +246,10 @@ export default function PlayMode({ engine, onGameEnd }) {
     if (!move) return false;
 
     const isWhite = move.color === 'w';
+    const uci = from + to + (move.promotion || '');
+
+    // Track UCI for book detection
+    uciHistoryRef.current = [...uciHistoryRef.current, uci];
 
     // Commit the move to state immediately
     setHistory((prev) => [...prev, { san: move.san, fen: game.fen(), classification: null }]);
@@ -239,14 +262,26 @@ export default function PlayMode({ engine, onGameEnd }) {
 
     if (checkGameOver()) return true;
 
-    if (settingsRef.current.blunderWarnings && evalBefore !== null) {
-      // Run blunder check before making the engine move
+    // Check if this is a book move (matches known opening theory)
+    if (isBookMove(uciHistoryRef.current)) {
+      const classification = { type: 'book', symbol: '', color: '#a88865', label: 'Book' };
+      setHistory((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...updated[updated.length - 1], classification };
+        return updated;
+      });
+      showIndicator(classification);
+      makeEngineMove();
+      return true;
+    }
+
+    // Always classify moves using engine eval
+    if (evalBefore !== null) {
       isThinkingRef.current = true;
       setIsThinking(true);
 
       engineGetBestMove(game.fen(), 10).then((result) => {
         if (!result) {
-          // Search was cancelled — just make engine move
           isThinkingRef.current = false;
           setIsThinking(false);
           makeEngineMove();
@@ -254,13 +289,20 @@ export default function PlayMode({ engine, onGameEnd }) {
         }
 
         const evalAfter = result.eval ?? 0;
-        const classification = classifyMove(evalBefore, evalAfter, isWhite);
+        const classification = classifyMove(evalBefore, evalAfter, isWhite, {
+          piece: move.piece,
+          captured: move.captured,
+          to: move.to,
+          color: move.color,
+          gameAfter: gameRef.current,
+          playerUci: uci,
+          bestUci: preMoveBestUci,
+        });
         evalBeforeRef.current = evalAfter;
 
         // Update this move's classification in history
         setHistory((prev) => {
           const updated = [...prev];
-          // Find the last player move (should be the one we just added)
           for (let i = updated.length - 1; i >= 0; i--) {
             if (updated[i].classification === null) {
               updated[i] = { ...updated[i], classification };
@@ -270,7 +312,17 @@ export default function PlayMode({ engine, onGameEnd }) {
           return updated;
         });
 
-        if (classification.type === 'blunder' || classification.type === 'mistake') {
+        // Show per-move indicator
+        showIndicator(classification);
+
+        // Brilliant flash
+        if (classification.type === 'brilliant') {
+          setBrilliantFlash(true);
+        }
+
+        // Blunder/mistake alert (only if warnings enabled)
+        if (settingsRef.current.blunderWarnings &&
+            (classification.type === 'blunder' || classification.type === 'mistake' || classification.type === 'miss')) {
           const bestSan = preMoveBestUci
             ? uciToSan(preMoveBestUci, fenBeforeMove)
             : '';
@@ -287,20 +339,18 @@ export default function PlayMode({ engine, onGameEnd }) {
             classification,
           });
         } else {
-          // Not a blunder — make engine move
           isThinkingRef.current = false;
           setIsThinking(false);
           makeEngineMove();
         }
       });
     } else {
-      // No blunder check — make engine move right away
-      evalBeforeRef.current = engineEvalRef.current;
+      // No eval yet (first move) — just make engine move
       makeEngineMove();
     }
 
     return true;
-  }, [engineGetBestMove, blunderAlert, checkGameOver, makeEngineMove]);
+  }, [engineGetBestMove, blunderAlert, checkGameOver, makeEngineMove, showIndicator]);
 
   // User saw the blunder alert and chose to continue
   const handleBlunderConfirm = useCallback(() => {
@@ -313,6 +363,7 @@ export default function PlayMode({ engine, onGameEnd }) {
     setBlunderAlert(null);
     const game = gameRef.current;
     game.undo();
+    uciHistoryRef.current = uciHistoryRef.current.slice(0, -1);
     setHistory((prev) => prev.slice(0, -1));
     setCurrentMoveIndex((prev) => prev - 1);
     setFen(game.fen());
@@ -325,10 +376,12 @@ export default function PlayMode({ engine, onGameEnd }) {
 
     game.undo();
     game.undo();
+    uciHistoryRef.current = uciHistoryRef.current.slice(0, -2);
     setHistory((prev) => prev.slice(0, -2));
     setCurrentMoveIndex((prev) => Math.max(-1, prev - 2));
     setFen(game.fen());
     setGameOver(null);
+    setMoveIndicator(null);
     engineAnalyze(game.fen(), settingsRef.current.engineDepth);
   }, [history.length, isThinking, engineAnalyze]);
 
@@ -352,6 +405,9 @@ export default function PlayMode({ engine, onGameEnd }) {
     isThinkingRef.current = false;
     setBoardOrientation(newColor);
     evalBeforeRef.current = null;
+    uciHistoryRef.current = [];
+    setMoveIndicator(null);
+    setBrilliantFlash(false);
 
     engineNewGame();
     engineSetSkillLevel(s.skillLevel);
@@ -389,6 +445,22 @@ export default function PlayMode({ engine, onGameEnd }) {
     engineSetSkillLevel(diff.skill);
   }, [engineSetSkillLevel]);
 
+  // Auto-dismiss brilliant flash
+  useEffect(() => {
+    if (brilliantFlash) {
+      const timer = setTimeout(() => setBrilliantFlash(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [brilliantFlash]);
+
+  // Auto-dismiss move indicator
+  useEffect(() => {
+    if (moveIndicator) {
+      const timer = setTimeout(() => setMoveIndicator(null), 2200);
+      return () => clearTimeout(timer);
+    }
+  }, [moveIndicator, indicatorKey]);
+
   // Keyboard shortcut: H for hints
   useEffect(() => {
     const handler = (e) => {
@@ -406,7 +478,7 @@ export default function PlayMode({ engine, onGameEnd }) {
   const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
   const allArrows = [...arrows, ...threatArrows];
 
-  // Store current eval for blunder detection
+  // Store current eval for classification
   useEffect(() => {
     if (engineEval !== null) {
       evalBeforeRef.current = engineEval;
@@ -419,6 +491,17 @@ export default function PlayMode({ engine, onGameEnd }) {
   const currentDifficulty = DIFFICULTIES.find(
     (d) => d.skill === settings.skillLevel && d.depth === settings.engineDepth
   );
+
+  // Compute game summary counts
+  const summaryCounts = gameOver ? {
+    brilliant: history.filter((m) => m.classification?.type === 'brilliant').length,
+    great: history.filter((m) => m.classification?.type === 'great').length,
+    best: history.filter((m) => m.classification?.type === 'best').length,
+    blunders: history.filter((m) => m.classification?.type === 'blunder').length,
+    mistakes: history.filter((m) => m.classification?.type === 'mistake').length,
+    misses: history.filter((m) => m.classification?.type === 'miss').length,
+    inaccuracies: history.filter((m) => m.classification?.type === 'inaccuracy').length,
+  } : null;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -439,17 +522,50 @@ export default function PlayMode({ engine, onGameEnd }) {
         ))}
       </div>
 
-      <div className="text-sm text-gray-400">
-        {gameOver ? (
-          <span className="text-yellow-300 font-bold">{gameOver}</span>
-        ) : isThinking ? (
-          <span>Engine is thinking...</span>
-        ) : isPlayerTurn ? (
-          <span>Your turn</span>
-        ) : (
-          <span>Waiting...</span>
+      {/* Status + move indicator */}
+      <div className="flex items-center gap-3">
+        <div className="text-sm text-gray-400">
+          {gameOver ? (
+            <span className="text-yellow-300 font-bold">{gameOver}</span>
+          ) : isThinking ? (
+            <span>Engine is thinking...</span>
+          ) : isPlayerTurn ? (
+            <span>Your turn</span>
+          ) : (
+            <span>Waiting...</span>
+          )}
+        </div>
+
+        {moveIndicator && (
+          <div
+            key={indicatorKey}
+            className="move-indicator px-3 py-0.5 rounded-full text-xs font-bold"
+            style={{
+              backgroundColor: moveIndicator.color + '20',
+              color: moveIndicator.color,
+              border: `1px solid ${moveIndicator.color}30`,
+            }}
+          >
+            {moveIndicator.symbol ? `${moveIndicator.symbol} ` : ''}{moveIndicator.label}
+          </div>
         )}
       </div>
+
+      {/* Brilliant move notification */}
+      {brilliantFlash && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+          <div className="px-6 py-3 rounded-lg shadow-lg border border-cyan-400/50"
+            style={{
+              background: 'linear-gradient(135deg, rgba(38,198,218,0.2) 0%, rgba(0,150,136,0.2) 100%)',
+              boxShadow: '0 0 30px rgba(38,198,218,0.4), 0 0 60px rgba(38,198,218,0.2)',
+            }}
+          >
+            <span className="text-2xl font-black tracking-wide" style={{ color: '#26c6da' }}>
+              !! Brilliant
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-4 items-start">
         {settings.showEval && (
@@ -490,19 +606,27 @@ export default function PlayMode({ engine, onGameEnd }) {
         </div>
       </div>
 
-      {gameOver && (
+      {gameOver && summaryCounts && (
         <div className="bg-gray-800 rounded-lg p-4 max-w-md text-center">
           <h3 className="text-lg font-bold mb-2">{gameOver}</h3>
-          <div className="flex gap-4 justify-center text-sm mb-3">
-            <span className="text-red-400">
-              {history.filter((m) => m.classification?.type === 'blunder').length} blunders
-            </span>
-            <span className="text-orange-400">
-              {history.filter((m) => m.classification?.type === 'mistake').length} mistakes
-            </span>
-            <span className="text-yellow-400">
-              {history.filter((m) => m.classification?.type === 'inaccuracy').length} inaccuracies
-            </span>
+          <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
+            {summaryCounts.brilliant > 0 && (
+              <span style={{ color: '#26c6da' }}>{summaryCounts.brilliant} brilliant</span>
+            )}
+            {summaryCounts.best > 0 && (
+              <span style={{ color: '#96bc4b' }}>{summaryCounts.best} best</span>
+            )}
+            {summaryCounts.great > 0 && (
+              <span style={{ color: '#5dadec' }}>{summaryCounts.great} great</span>
+            )}
+          </div>
+          <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
+            <span className="text-red-400">{summaryCounts.blunders} blunders</span>
+            <span className="text-orange-400">{summaryCounts.mistakes} mistakes</span>
+            {summaryCounts.misses > 0 && (
+              <span className="text-orange-400">{summaryCounts.misses} misses</span>
+            )}
+            <span style={{ color: '#f7c631' }}>{summaryCounts.inaccuracies} inaccuracies</span>
           </div>
           <button
             onClick={handleNewGame}

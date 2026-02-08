@@ -4,8 +4,10 @@ export default function BlunderAlert({
 }) {
   if (!visible) return null;
 
-  const title = classification?.type === 'blunder' ? 'Blunder!' : 'Mistake!';
-  const bgColor = classification?.type === 'blunder' ? 'border-red-500' : 'border-orange-500';
+  const titles = { blunder: 'Blunder!', mistake: 'Mistake!', miss: 'Missed Opportunity!' };
+  const borders = { blunder: 'border-red-500', mistake: 'border-orange-500', miss: 'border-orange-500' };
+  const title = titles[classification?.type] || 'Mistake!';
+  const bgColor = borders[classification?.type] || 'border-orange-500';
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
