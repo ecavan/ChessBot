@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#16213e"/>
+  <rect x="24" y="24" width="464" height="464" rx="80" fill="#0f3460" stroke="#533483" stroke-width="4"/>
+  <!-- Chess knight silhouette -->
+  <g transform="translate(128, 64)" fill="#e2e8f0">
+    <!-- Head and neck -->
+    <path d="M80 20 C60 20 40 35 35 55 L25 95 C20 110 30 120 40 118 L50 115 C45 140 30 160 20 180 L15 200 C10 220 25 240 45 240 L60 240 L60 280 C60 300 50 320 40 335 L30 350 L230 350 L220 335 C210 320 200 295 200 280 L200 200 C200 170 185 145 165 130 L150 120 C170 115 185 100 190 80 C195 60 185 40 165 30 C150 22 130 20 115 20 Z"/>
+    <!-- Eye -->
+    <circle cx="85" cy="70" r="12" fill="#0f3460"/>
+    <!-- Base -->
+    <rect x="20" y="350" width="220" height="30" rx="8"/>
+  </g>
+</svg>
