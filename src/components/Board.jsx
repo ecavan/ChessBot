@@ -20,7 +20,7 @@ export default function Board({
   disabled = false,
 }) {
   return (
-    <div style={{ width: 360, maxWidth: '100%' }}>
+    <div style={{ width: 360, maxWidth: '100%', aspectRatio: '1 / 1' }}>
       <Chessboard
         options={{
           id: 'trainer-board',
