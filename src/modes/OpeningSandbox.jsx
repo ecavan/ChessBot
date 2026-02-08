@@ -1,15 +1,26 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../components/Board';
+import EvalBar from '../components/EvalBar';
 import MoveList from '../components/MoveList';
+import HintPanel from '../components/HintPanel';
 import { OPENINGS } from '../data/openings';
+import { generateHint } from '../engine/hints';
 
 export default function OpeningSandbox({ engine }) {
   // Destructure engine: functions are stable, reactive values change
   const {
+    evaluation: engineEval,
+    topLines: engineTopLines,
     getBestMove: engineGetBestMove,
+    analyze: engineAnalyze,
+    setMultiPV: engineSetMultiPV,
     newGame: engineNewGame,
   } = engine;
+
+  // Refs for reactive values used inside callbacks
+  const engineTopLinesRef = useRef(engineTopLines);
+  engineTopLinesRef.current = engineTopLines;
 
   const [selectedOpening, setSelectedOpening] = useState(null);
   const gameRef = useRef(new Chess());
@@ -22,6 +33,8 @@ export default function OpeningSandbox({ engine }) {
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
   const [isThinking, setIsThinking] = useState(false);
+  const [hintLevel, setHintLevel] = useState(0);
+  const [hintData, setHintData] = useState(null);
 
   const opening = selectedOpening ? OPENINGS[selectedOpening] : null;
   const playerIsWhite = opening?.color === 'white';
@@ -64,7 +77,14 @@ export default function OpeningSandbox({ engine }) {
       }
     }
     setIsThinking(false);
-  }, [engineGetBestMove]);
+    // Start analysis for hints after engine moves
+    engineAnalyze(gameRef.current.fen(), 10);
+  }, [engineGetBestMove, engineAnalyze]);
+
+  // Enable MultiPV for hints in free play
+  useEffect(() => {
+    engineSetMultiPV(3);
+  }, [engineSetMultiPV]);
 
   // Auto-play engine's opening moves when it's the engine's turn
   useEffect(() => {
@@ -169,6 +189,8 @@ export default function OpeningSandbox({ engine }) {
       setFeedback(null);
       setArrows([]);
       setSquareStyles({});
+      setHintLevel(0);
+      setHintData(null);
 
       if (!game.isGameOver()) {
         makeEngineFreeMove();
@@ -176,6 +198,35 @@ export default function OpeningSandbox({ engine }) {
       return true;
     }
   }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove]);
+
+  const handleUndo = useCallback(() => {
+    if (isOpeningPhase || isThinking) return;
+    const game = gameRef.current;
+    if (history.length < 2) return;
+
+    game.undo();
+    game.undo();
+    setHistory((prev) => prev.slice(0, -2));
+    setFen(game.fen());
+    setArrows([]);
+    setSquareStyles({});
+    setHintLevel(0);
+    setHintData(null);
+    setFeedback({ type: 'complete', text: 'Move taken back. Your turn.' });
+    engineAnalyze(game.fen(), 10);
+  }, [isOpeningPhase, isThinking, history.length, engineAnalyze]);
+
+  const handleRequestHint = useCallback(() => {
+    if (isOpeningPhase) return;
+    const newLevel = Math.min(hintLevel + 1, 3);
+    setHintLevel(newLevel);
+    const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
+    setHintData(hint);
+    if (hint) {
+      setArrows(hint.arrows || []);
+      setSquareStyles(hint.squareStyles || {});
+    }
+  }, [hintLevel, isOpeningPhase]);
 
   const handleReset = useCallback(() => {
     gameRef.current = new Chess();
@@ -188,8 +239,21 @@ export default function OpeningSandbox({ engine }) {
     setArrows([]);
     setSquareStyles({});
     setIsThinking(false);
+    setHintLevel(0);
+    setHintData(null);
     engineNewGame();
   }, [engineNewGame]);
+
+  // Keyboard shortcut: H for hints during free play
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.key === 'h' || e.key === 'H') && !isOpeningPhase && !isThinking && hintLevel < 3) {
+        handleRequestHint();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpeningPhase, isThinking, hintLevel, handleRequestHint]);
 
   // Opening selection screen
   if (!selectedOpening) {
@@ -243,6 +307,11 @@ export default function OpeningSandbox({ engine }) {
       </div>
 
       <div className="flex gap-4 items-start">
+        {/* Eval bar in free play */}
+        {!isOpeningPhase && (
+          <EvalBar evaluation={engineEval} playerColor={boardColor} />
+        )}
+
         {/* Board */}
         <Board
           fen={fen}
@@ -273,6 +342,16 @@ export default function OpeningSandbox({ engine }) {
           {/* Move list */}
           <MoveList history={history} currentMoveIndex={history.length - 1} />
 
+          {/* Hints in free play */}
+          {!isOpeningPhase && (
+            <HintPanel
+              hintLevel={hintLevel}
+              hintData={hintData}
+              onRequestHint={handleRequestHint}
+              disabled={isThinking}
+            />
+          )}
+
           {/* Principles */}
           {isOpeningPhase && (
             <div className="bg-gray-800 rounded p-3">
@@ -296,6 +375,15 @@ export default function OpeningSandbox({ engine }) {
             >
               Restart
             </button>
+            {!isOpeningPhase && (
+              <button
+                onClick={handleUndo}
+                disabled={isThinking || history.length < 2}
+                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium transition-colors"
+              >
+                Undo
+              </button>
+            )}
           </div>
 
           {/* Progress */}

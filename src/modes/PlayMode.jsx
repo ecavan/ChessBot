@@ -23,6 +23,32 @@ function uciToSan(uci, fen) {
   }
 }
 
+function pvToSan(uciMoves, fen, maxMoves = 5) {
+  try {
+    const game = new Chess(fen);
+    const sans = [];
+    for (let i = 0; i < Math.min(uciMoves.length, maxMoves); i++) {
+      const from = uciMoves[i].slice(0, 2);
+      const to = uciMoves[i].slice(2, 4);
+      const promotion = uciMoves[i].length > 4 ? uciMoves[i][4] : undefined;
+      const move = game.move({ from, to, promotion });
+      if (move) {
+        const num = Math.ceil((i + 1) / 2);
+        if (i % 2 === 0 && game.turn() === 'b') {
+          sans.push(`${num}. ${move.san}`);
+        } else if (i % 2 === 0) {
+          sans.push(`${num}... ${move.san}`);
+        } else {
+          sans.push(move.san);
+        }
+      } else break;
+    }
+    return sans.join(' ');
+  } catch {
+    return '';
+  }
+}
+
 const DIFFICULTIES = [
   { label: 'Beginner', skill: 0, depth: 5 },
   { label: 'Easy', skill: 3, depth: 8 },
@@ -189,6 +215,8 @@ export default function PlayMode({ engine, onGameEnd }) {
     const fenBeforeMove = game.fen();
     const evalBefore = evalBeforeRef.current;
     const preMoveBestUci = engineTopLinesRef.current[0]?.moves[0] || '';
+    const preMovePV = engineTopLinesRef.current[0]?.moves?.slice(0, 5) || [];
+    const preMovePVEval = engineTopLinesRef.current[0]?.eval;
 
     let move;
     try {
@@ -246,12 +274,16 @@ export default function PlayMode({ engine, onGameEnd }) {
           const bestSan = preMoveBestUci
             ? uciToSan(preMoveBestUci, fenBeforeMove)
             : '';
+          const bestLine = pvToSan(preMovePV, fenBeforeMove, 5);
 
           isThinkingRef.current = false;
           setIsThinking(false);
           setBlunderAlert({
-            evalLoss: Math.abs(evalBefore - evalAfter),
+            evalLoss: evalBefore + evalAfter,
             bestMoveSan: bestSan,
+            bestLine,
+            bestLineEval: preMovePVEval,
+            playerMoveSan: move.san,
             classification,
           });
         } else {
@@ -485,6 +517,9 @@ export default function PlayMode({ engine, onGameEnd }) {
         visible={!!blunderAlert}
         evalLoss={blunderAlert?.evalLoss || 0}
         bestMoveSan={blunderAlert?.bestMoveSan || ''}
+        bestLine={blunderAlert?.bestLine || ''}
+        bestLineEval={blunderAlert?.bestLineEval}
+        playerMoveSan={blunderAlert?.playerMoveSan || ''}
         classification={blunderAlert?.classification}
         onConfirm={handleBlunderConfirm}
         onTakeBack={handleBlunderTakeBack}
