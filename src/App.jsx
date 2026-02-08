@@ -1,0 +1,70 @@
+import { useState, useCallback } from 'react';
+import { useStockfish } from './engine/useStockfish';
+import PlayMode from './modes/PlayMode';
+import OpeningSandbox from './modes/OpeningSandbox';
+import ReviewMode from './modes/ReviewMode';
+
+const MODES = [
+  { key: 'play', label: 'Play' },
+  { key: 'openings', label: 'Openings' },
+  { key: 'review', label: 'Review' },
+];
+
+export default function App() {
+  const engine = useStockfish();
+  const [activeMode, setActiveMode] = useState('play');
+  const [lastGamePgn, setLastGamePgn] = useState(null);
+
+  const handleModeChange = useCallback((mode) => {
+    setActiveMode(mode);
+    engine.newGame();
+  }, [engine]);
+
+  const handleGameEnd = useCallback((pgn) => {
+    setLastGamePgn(pgn);
+  }, []);
+
+  if (!engine.isReady) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-400">Loading Stockfish engine...</p>
+          <p className="text-gray-600 text-xs mt-1">This may take a few seconds on first visit</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <nav className="flex items-center gap-4 p-4 bg-gray-800 border-b border-gray-700">
+        <h1 className="text-lg font-bold mr-4">Chess Trainer</h1>
+        {MODES.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => handleModeChange(key)}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              activeMode === key
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <main className="p-6 flex justify-center">
+        {activeMode === 'play' && (
+          <PlayMode engine={engine} onGameEnd={handleGameEnd} />
+        )}
+        {activeMode === 'openings' && (
+          <OpeningSandbox engine={engine} />
+        )}
+        {activeMode === 'review' && (
+          <ReviewMode engine={engine} initialPgn={lastGamePgn} />
+        )}
+      </main>
+    </div>
+  );
+}
