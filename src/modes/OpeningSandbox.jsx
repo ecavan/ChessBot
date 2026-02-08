@@ -4,10 +4,6 @@ import Board from '../components/Board';
 import MoveList from '../components/MoveList';
 import { OPENINGS } from '../data/openings';
 
-function moveToUci(move) {
-  return move.from + move.to + (move.promotion || '');
-}
-
 export default function OpeningSandbox({ engine }) {
   const [selectedOpening, setSelectedOpening] = useState(null);
   const gameRef = useRef(new Chess());
@@ -92,10 +88,19 @@ export default function OpeningSandbox({ engine }) {
     }
   }, [opening, moveIndex, fen, isOpeningPhase, playerIsWhite, makeBookMove, makeEngineFreeMove]);
 
-  const handleMove = useCallback((move) => {
-    if (!opening) return;
+  const handleMove = useCallback((from, to) => {
+    if (!opening) return false;
 
-    const uci = moveToUci(move);
+    const game = gameRef.current;
+    let move;
+    try {
+      move = game.move({ from, to, promotion: 'q' });
+    } catch {
+      return false;
+    }
+    if (!move) return false;
+
+    const uci = from + to + (move.promotion || '');
 
     if (isOpeningPhase && moveIndex < opening.moves.length) {
       const expectedMove = opening.moves[moveIndex];
@@ -104,29 +109,30 @@ export default function OpeningSandbox({ engine }) {
       if (uci === expectedMove) {
         // Correct book move
         setSquareStyles({
-          [move.from]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
-          [move.to]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
+          [from]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
+          [to]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
         });
         setArrows([]);
         setFeedback({ type: 'book', text: 'Book move! Well played.' });
         setMoveHistory(currentHistory);
         setMoveIndex((prev) => prev + 1);
         setHistory((prev) => [...prev, { san: move.san, classification: { type: 'great', symbol: '!', color: '#2ecc71' } }]);
-        setFen(gameRef.current.fen());
+        setFen(game.fen());
+        return true;
       } else {
         // Deviation from book
         const deviationKey = currentHistory;
         const deviation = opening.deviations[deviationKey];
 
         // Undo the move
-        gameRef.current.undo();
-        setFen(gameRef.current.fen());
+        game.undo();
+        setFen(game.fen());
 
         const expectedFrom = expectedMove.slice(0, 2);
         const expectedTo = expectedMove.slice(2, 4);
 
         setSquareStyles({
-          [move.to]: { backgroundColor: 'rgba(255, 200, 0, 0.4)' },
+          [to]: { backgroundColor: 'rgba(255, 200, 0, 0.4)' },
         });
         setArrows([[expectedFrom, expectedTo, 'rgb(0, 180, 0)']]);
 
@@ -135,7 +141,7 @@ export default function OpeningSandbox({ engine }) {
         } else {
           // Try to get the SAN of the book move
           try {
-            const tempGame = new Chess(gameRef.current.fen());
+            const tempGame = new Chess(game.fen());
             const bookMove = tempGame.move({ from: expectedFrom, to: expectedTo });
             setFeedback({
               type: 'deviation',
@@ -148,18 +154,20 @@ export default function OpeningSandbox({ engine }) {
             });
           }
         }
+        return false;
       }
     } else {
       // Free play phase
       setHistory((prev) => [...prev, { san: move.san, classification: null }]);
-      setFen(gameRef.current.fen());
+      setFen(game.fen());
       setFeedback(null);
       setArrows([]);
       setSquareStyles({});
 
-      if (!gameRef.current.isGameOver()) {
+      if (!game.isGameOver()) {
         makeEngineFreeMove();
       }
+      return true;
     }
   }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove]);
 
@@ -231,13 +239,12 @@ export default function OpeningSandbox({ engine }) {
       <div className="flex gap-4">
         {/* Board */}
         <Board
-          game={gameRef.current}
+          fen={fen}
           onMove={handleMove}
           arrows={arrows}
           squareStyles={squareStyles}
           playerColor={boardColor}
           disabled={!isPlayerTurn || isThinking}
-          boardWidth={480}
         />
 
         {/* Side panel */}

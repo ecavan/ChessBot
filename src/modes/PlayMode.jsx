@@ -6,16 +6,16 @@ import MoveList from '../components/MoveList';
 import HintPanel from '../components/HintPanel';
 import BlunderAlert from '../components/BlunderAlert';
 import GameControls from '../components/GameControls';
-import { classifyMove, explainMove } from '../engine/analysis';
+import { classifyMove } from '../engine/analysis';
 import { generateHint } from '../engine/hints';
 import { getThreats } from '../utils/arrows';
 
-function uciToSan(uci, game) {
+function uciToSan(uci, fen) {
   try {
+    const tempGame = new Chess(fen);
     const from = uci.slice(0, 2);
     const to = uci.slice(2, 4);
     const promotion = uci.length > 4 ? uci[4] : undefined;
-    const tempGame = new Chess(game.fen());
     const move = tempGame.move({ from, to, promotion });
     return move ? move.san : uci;
   } catch {
@@ -46,6 +46,7 @@ export default function PlayMode({ engine, onGameEnd }) {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const pendingMoveRef = useRef(null);
   const evalBeforeRef = useRef(null);
+  const isThinkingRef = useRef(false);
 
   const actualColor = settings.playerColor === 'random'
     ? (Math.random() < 0.5 ? 'white' : 'black')
@@ -68,14 +69,6 @@ export default function PlayMode({ engine, onGameEnd }) {
       engine.analyze(gameRef.current.fen(), settings.engineDepth);
     }
   }, [engine, engine.isReady, settings.engineDepth]);
-
-  // If the engine should move first (player is black), trigger it
-  useEffect(() => {
-    if (engine.isReady && boardOrientation === 'black' && gameRef.current.turn() === 'w' && history.length === 0) {
-      makeEngineMove();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.isReady, boardOrientation]);
 
   const checkGameOver = useCallback(() => {
     const game = gameRef.current;
@@ -100,25 +93,33 @@ export default function PlayMode({ engine, onGameEnd }) {
   }, [onGameEnd]);
 
   const makeEngineMove = useCallback(async () => {
+    if (isThinkingRef.current) return;
+    isThinkingRef.current = true;
     setIsThinking(true);
     setArrows([]);
     setSquareStyles({});
 
-    // Small delay to feel natural
     await new Promise((r) => setTimeout(r, 400));
 
     const game = gameRef.current;
-    const result = await engine.getBestMove(game.fen(), settings.engineDepth);
-    if (!result || !result.move) {
+    if (game.isGameOver()) {
+      isThinkingRef.current = false;
       setIsThinking(false);
       return;
     }
 
-    const from = result.move.slice(0, 2);
-    const to = result.move.slice(2, 4);
-    const promotion = result.move.length > 4 ? result.move[4] : undefined;
-
     try {
+      const result = await engine.getBestMove(game.fen(), settings.engineDepth);
+      if (!result || !result.move || result.move === '(none)') {
+        isThinkingRef.current = false;
+        setIsThinking(false);
+        return;
+      }
+
+      const from = result.move.slice(0, 2);
+      const to = result.move.slice(2, 4);
+      const promotion = result.move.length > 4 ? result.move[4] : undefined;
+
       const move = game.move({ from, to, promotion });
       if (move) {
         setHistory((prev) => [...prev, {
@@ -128,26 +129,101 @@ export default function PlayMode({ engine, onGameEnd }) {
         }]);
         setCurrentMoveIndex((prev) => prev + 1);
         setFen(game.fen());
-        checkGameOver();
 
-        // Analyze new position for player's turn
-        engine.analyze(game.fen(), settings.engineDepth);
+        if (!checkGameOver()) {
+          engine.analyze(game.fen(), settings.engineDepth);
+        }
       }
     } catch {
       // Engine returned invalid move
     }
 
+    isThinkingRef.current = false;
     setIsThinking(false);
   }, [engine, settings.engineDepth, checkGameOver]);
 
-  const commitPlayerMove = useCallback(async (move, classification) => {
-    const game = gameRef.current;
+  // If the engine should move first (player is black), trigger it
+  useEffect(() => {
+    if (engine.isReady && boardOrientation === 'black' && gameRef.current.turn() === 'w' && history.length === 0) {
+      makeEngineMove();
+    }
+  }, [engine.isReady, boardOrientation, history.length, makeEngineMove]);
 
-    setHistory((prev) => [...prev, {
-      san: move.san,
-      fen: game.fen(),
-      classification,
-    }]);
+  // handleMove is called synchronously from Board's onPieceDrop
+  // It must return a boolean: true = accept move, false = reject
+  const handleMove = useCallback((from, to) => {
+    if (isThinkingRef.current) return false;
+
+    const game = gameRef.current;
+    let move;
+    try {
+      move = game.move({ from, to, promotion: 'q' });
+    } catch {
+      return false;
+    }
+    if (!move) return false;
+
+    // Move is legal — check for blunder warning
+    if (settings.blunderWarnings && evalBeforeRef.current !== null) {
+      const evalBefore = evalBeforeRef.current;
+      const isWhite = game.turn() === 'b'; // move was already applied, so turn flipped
+      const fenAfterMove = game.fen();
+
+      // Undo to keep game in pre-move state until we confirm
+      game.undo();
+      setFen(game.fen());
+
+      // Start async blunder check
+      pendingMoveRef.current = { from, to, move, evalBefore, isWhite };
+      engine.getBestMove(fenAfterMove, 12).then((result) => {
+        const pending = pendingMoveRef.current;
+        if (!pending || pending.from !== from || pending.to !== to) return;
+
+        const evalAfter = result?.eval ?? 0;
+        const classification = classifyMove(evalBefore, evalAfter, isWhite);
+
+        if (classification.type === 'blunder' || classification.type === 'mistake') {
+          const bestSan = engine.topLines[0]?.moves[0]
+            ? uciToSan(engine.topLines[0].moves[0], game.fen())
+            : '';
+
+          pendingMoveRef.current = { ...pending, classification };
+          setBlunderAlert({
+            evalLoss: Math.abs(evalBefore - evalAfter),
+            bestMoveSan: bestSan,
+            classification,
+          });
+        } else {
+          // Move is fine — commit it
+          pendingMoveRef.current = null;
+          try {
+            const committedMove = game.move({ from, to, promotion: 'q' });
+            if (committedMove) {
+              evalBeforeRef.current = evalAfter;
+              setHistory((prev) => [...prev, { san: committedMove.san, fen: game.fen(), classification }]);
+              setCurrentMoveIndex((prev) => prev + 1);
+              setFen(game.fen());
+              setHintLevel(0);
+              setHintData(null);
+              setArrows([]);
+              setSquareStyles({});
+
+              if (!checkGameOver()) {
+                makeEngineMove();
+              }
+            }
+          } catch {
+            // Move became invalid
+          }
+        }
+      });
+
+      return false; // Piece snaps back while we check
+    }
+
+    // No blunder warnings — commit immediately
+    evalBeforeRef.current = engine.evaluation;
+    setHistory((prev) => [...prev, { san: move.san, fen: game.fen(), classification: null }]);
     setCurrentMoveIndex((prev) => prev + 1);
     setFen(game.fen());
     setHintLevel(0);
@@ -155,89 +231,50 @@ export default function PlayMode({ engine, onGameEnd }) {
     setArrows([]);
     setSquareStyles({});
 
-    if (checkGameOver()) return;
-
-    // Engine's turn
-    await makeEngineMove();
-  }, [checkGameOver, makeEngineMove]);
-
-  const handleMove = useCallback(async (move) => {
-    const game = gameRef.current;
-
-    if (settings.blunderWarnings && evalBeforeRef.current !== null) {
-      // Check if this is a blunder before committing
-      const evalBefore = engine.evaluation;
-      const isWhite = game.turn() === 'b'; // move was already made by chess.js
-      const cloneFen = game.fen();
-
-      // Get eval of the new position
-      const result = await engine.getBestMove(cloneFen, 12);
-      const evalAfter = result?.eval ?? 0;
-      const classification = classifyMove(evalBefore ?? 0, evalAfter, isWhite);
-
-      if ((classification.type === 'blunder' || classification.type === 'mistake')) {
-        // Undo the move - it was already made in Board's onDrop
-        game.undo();
-        setFen(game.fen());
-
-        const bestSan = engine.topLines[0]?.moves[0]
-          ? uciToSan(engine.topLines[0].moves[0], game)
-          : '';
-
-        pendingMoveRef.current = { move, classification };
-        setBlunderAlert({
-          evalLoss: Math.abs((evalBefore ?? 0) - evalAfter),
-          bestMoveSan: bestSan,
-          classification,
-        });
-        return;
-      }
-
-      // Move is fine
-      evalBeforeRef.current = evalAfter;
-      await commitPlayerMove(move, classification);
-      return;
+    if (!checkGameOver()) {
+      makeEngineMove();
     }
 
-    // No blunder warnings
-    evalBeforeRef.current = engine.evaluation;
-    await commitPlayerMove(move, null);
-  }, [engine, settings.blunderWarnings, commitPlayerMove]);
+    return true;
+  }, [engine, settings.blunderWarnings, checkGameOver, makeEngineMove]);
 
-  const handleBlunderConfirm = useCallback(async () => {
+  const handleBlunderConfirm = useCallback(() => {
     const pending = pendingMoveRef.current;
     if (!pending) return;
 
-    // Re-make the move
     const game = gameRef.current;
     try {
-      const move = game.move({
-        from: pending.move.from,
-        to: pending.move.to,
-        promotion: pending.move.promotion || 'q',
-      });
+      const move = game.move({ from: pending.from, to: pending.to, promotion: 'q' });
       if (move) {
         setBlunderAlert(null);
+        setHistory((prev) => [...prev, { san: move.san, fen: game.fen(), classification: pending.classification }]);
+        setCurrentMoveIndex((prev) => prev + 1);
+        setFen(game.fen());
+        setHintLevel(0);
+        setHintData(null);
+        setArrows([]);
+        setSquareStyles({});
         pendingMoveRef.current = null;
-        await commitPlayerMove(move, pending.classification);
+
+        if (!checkGameOver()) {
+          makeEngineMove();
+        }
       }
     } catch {
       setBlunderAlert(null);
       pendingMoveRef.current = null;
     }
-  }, [commitPlayerMove]);
+  }, [checkGameOver, makeEngineMove]);
 
   const handleBlunderTakeBack = useCallback(() => {
     setBlunderAlert(null);
     pendingMoveRef.current = null;
-    // The move was already undone
   }, []);
 
   const handleUndo = useCallback(() => {
     const game = gameRef.current;
     if (history.length < 2 || isThinking) return;
 
-    // Undo engine move + player move
     game.undo();
     game.undo();
     setHistory((prev) => prev.slice(0, -2));
@@ -263,6 +300,7 @@ export default function PlayMode({ engine, onGameEnd }) {
     setBlunderAlert(null);
     setGameOver(null);
     setIsThinking(false);
+    isThinkingRef.current = false;
     setBoardOrientation(newColor);
     evalBeforeRef.current = null;
     pendingMoveRef.current = null;
@@ -271,18 +309,10 @@ export default function PlayMode({ engine, onGameEnd }) {
     engine.setSkillLevel(settings.skillLevel);
     engine.setMultiPV(3);
 
-    // If player is black, engine moves first
-    if (newColor === 'black') {
-      setTimeout(() => {
-        engine.analyze(gameRef.current.fen(), settings.engineDepth);
-        makeEngineMove();
-      }, 100);
-    } else {
-      setTimeout(() => {
-        engine.analyze(gameRef.current.fen(), settings.engineDepth);
-      }, 100);
-    }
-  }, [engine, settings, makeEngineMove]);
+    setTimeout(() => {
+      engine.analyze(gameRef.current.fen(), settings.engineDepth);
+    }, 100);
+  }, [engine, settings]);
 
   const handleFlipBoard = useCallback(() => {
     setBoardOrientation((prev) => prev === 'white' ? 'black' : 'white');
@@ -322,7 +352,6 @@ export default function PlayMode({ engine, onGameEnd }) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Status bar */}
       <div className="text-sm text-gray-400">
         {gameOver ? (
           <span className="text-yellow-300 font-bold">{gameOver}</span>
@@ -335,25 +364,21 @@ export default function PlayMode({ engine, onGameEnd }) {
         )}
       </div>
 
-      <div className="flex gap-4">
-        {/* Eval bar */}
+      <div className="flex gap-4 items-start">
         {settings.showEval && (
           <EvalBar evaluation={engine.evaluation} playerColor={boardOrientation} />
         )}
 
-        {/* Board */}
         <Board
-          game={gameRef.current}
+          fen={fen}
           onMove={handleMove}
           arrows={allArrows}
           squareStyles={squareStyles}
           playerColor={boardOrientation}
-          disabled={isThinking || !!gameOver}
-          boardWidth={480}
+          disabled={isThinking || !!gameOver || !!blunderAlert}
         />
 
-        {/* Side panel */}
-        <div className="flex flex-col gap-3 w-64">
+        <div className="flex flex-col gap-3 w-60">
           <MoveList
             history={history}
             currentMoveIndex={currentMoveIndex}
@@ -378,7 +403,6 @@ export default function PlayMode({ engine, onGameEnd }) {
         </div>
       </div>
 
-      {/* Game over summary */}
       {gameOver && (
         <div className="bg-gray-800 rounded-lg p-4 max-w-md text-center">
           <h3 className="text-lg font-bold mb-2">{gameOver}</h3>
@@ -402,7 +426,6 @@ export default function PlayMode({ engine, onGameEnd }) {
         </div>
       )}
 
-      {/* Blunder alert overlay */}
       <BlunderAlert
         visible={!!blunderAlert}
         evalLoss={blunderAlert?.evalLoss || 0}

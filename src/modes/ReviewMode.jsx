@@ -219,12 +219,11 @@ export default function ReviewMode({ engine, initialPgn }) {
         <EvalBar evaluation={evalToShow} playerColor="white" />
 
         <Board
-          game={displayGameRef.current}
+          fen={displayFen}
           onMove={() => {}}
           arrows={arrows}
           playerColor="white"
           disabled={true}
-          boardWidth={480}
         />
 
         <div className="flex flex-col gap-3 w-72">

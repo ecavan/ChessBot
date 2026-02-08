@@ -12,7 +12,7 @@ export default function EvalBar({ evaluation, playerColor = 'white' }) {
   const isFlipped = playerColor === 'black';
 
   return (
-    <div className="flex flex-col items-center mr-2" style={{ height: 480 }}>
+    <div className="flex flex-col items-center mr-2" style={{ height: 360 }}>
       <div
         className="relative w-6 rounded overflow-hidden"
         style={{ height: '100%' }}
