@@ -68,7 +68,7 @@ const DIFFICULTIES = [
   { label: 'Max', skill: 20, depth: 16 },
 ];
 
-export default function PlayMode({ engine, onGameEnd }) {
+export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   // Destructure engine: functions are stable (useCallback with []), values change
   const {
     isReady: engineReady,
@@ -423,6 +423,15 @@ export default function PlayMode({ engine, onGameEnd }) {
     setBoardOrientation((prev) => prev === 'white' ? 'black' : 'white');
   }, []);
 
+  const handleBoardClick = useCallback(() => {
+    if (arrows.length > 0 || Object.keys(squareStyles).length > 0) {
+      setArrows([]);
+      setSquareStyles({});
+      setHintLevel(0);
+      setHintData(null);
+    }
+  }, [arrows.length, squareStyles]);
+
   const handleRequestHint = useCallback(() => {
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
@@ -485,11 +494,14 @@ export default function PlayMode({ engine, onGameEnd }) {
   const isPlayerTurn = (gameRef.current.turn() === 'w' && boardOrientation === 'white') ||
                        (gameRef.current.turn() === 'b' && boardOrientation === 'black');
 
-  // Compute threat arrows
+  // Compute threat arrows (deduplicate by from+to, prefer player threats over opponent threats)
   const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
   const playerThreatArrows = settings.showPlayerThreats && isPlayerTurn
     ? getPlayerThreats(gameRef.current) : [];
-  const allArrows = [...arrows, ...threatArrows, ...playerThreatArrows];
+  const arrowMap = new Map();
+  for (const a of threatArrows) arrowMap.set(a[0] + a[1], a);
+  for (const a of playerThreatArrows) arrowMap.set(a[0] + a[1], a); // overwrites red with orange
+  const allArrows = [...arrows, ...arrowMap.values()];
 
   const currentDifficulty = DIFFICULTIES.find(
     (d) => d.skill === settings.skillLevel && d.depth === settings.engineDepth
@@ -582,6 +594,7 @@ export default function PlayMode({ engine, onGameEnd }) {
           squareStyles={squareStyles}
           playerColor={boardOrientation}
           disabled={isThinking || !!gameOver || !!blunderAlert}
+          onSquareClick={handleBoardClick}
         />
 
         <div className="flex flex-col gap-3 w-60">
@@ -631,12 +644,28 @@ export default function PlayMode({ engine, onGameEnd }) {
             )}
             <span style={{ color: '#f7c631' }}>{summaryCounts.inaccuracies} inaccuracies</span>
           </div>
-          <button
-            onClick={handleNewGame}
-            className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium transition-colors"
-          >
-            Play Again
-          </button>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={handleNewGame}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-medium transition-colors text-sm"
+            >
+              Play Again
+            </button>
+            <button
+              onClick={() => navigator.clipboard.writeText(gameRef.current.pgn())}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium transition-colors text-sm"
+            >
+              Copy PGN
+            </button>
+            {onReviewGame && (
+              <button
+                onClick={() => onReviewGame(gameRef.current.pgn())}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-sm"
+              >
+                Review Game
+              </button>
+            )}
+          </div>
         </div>
       )}
 

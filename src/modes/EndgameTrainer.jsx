@@ -166,6 +166,15 @@ export default function EndgameTrainer({ engine }) {
     engineAnalyze(game.fen(), endgame?.engineDepth || 6);
   }, [isThinking, history.length, endgame, engineAnalyze]);
 
+  const handleBoardClick = useCallback(() => {
+    if (arrows.length > 0 || Object.keys(squareStyles).length > 0) {
+      setArrows([]);
+      setSquareStyles({});
+      setHintLevel(0);
+      setHintData(null);
+    }
+  }, [arrows.length, squareStyles]);
+
   const handleRequestHint = useCallback(() => {
     if (success) return;
     const newLevel = Math.min(hintLevel + 1, 3);
@@ -266,6 +275,7 @@ export default function EndgameTrainer({ engine }) {
           squareStyles={squareStyles}
           playerColor="white"
           disabled={isThinking || success || gameOverDraw}
+          onSquareClick={handleBoardClick}
         />
 
         <div className="flex flex-col gap-3 w-72">
@@ -331,6 +341,14 @@ export default function EndgameTrainer({ engine }) {
                 className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium transition-colors"
               >
                 Undo
+              </button>
+            )}
+            {history.length > 0 && (
+              <button
+                onClick={() => navigator.clipboard.writeText(gameRef.current.pgn())}
+                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+              >
+                Copy PGN
               </button>
             )}
           </div>

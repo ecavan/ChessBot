@@ -216,6 +216,15 @@ export default function OpeningSandbox({ engine }) {
     engineAnalyze(game.fen(), 10);
   }, [isOpeningPhase, isThinking, history.length, engineAnalyze]);
 
+  const handleBoardClick = useCallback(() => {
+    if (arrows.length > 0 || Object.keys(squareStyles).length > 0) {
+      setArrows([]);
+      setSquareStyles({});
+      setHintLevel(0);
+      setHintData(null);
+    }
+  }, [arrows.length, squareStyles]);
+
   const handleRequestHint = useCallback(() => {
     if (isOpeningPhase) return;
     const newLevel = Math.min(hintLevel + 1, 3);
@@ -320,6 +329,7 @@ export default function OpeningSandbox({ engine }) {
           squareStyles={squareStyles}
           playerColor={boardColor}
           disabled={!isPlayerTurn || isThinking}
+          onSquareClick={handleBoardClick}
         />
 
         {/* Side panel */}
@@ -382,6 +392,14 @@ export default function OpeningSandbox({ engine }) {
                 className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium transition-colors"
               >
                 Undo
+              </button>
+            )}
+            {history.length > 0 && (
+              <button
+                onClick={() => navigator.clipboard.writeText(gameRef.current.pgn())}
+                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+              >
+                Copy PGN
               </button>
             )}
           </div>

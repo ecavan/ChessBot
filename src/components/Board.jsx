@@ -18,6 +18,7 @@ export default function Board({
   squareStyles = {},
   playerColor = 'white',
   disabled = false,
+  onSquareClick,
 }) {
   return (
     <div style={{ width: 360, height: 360 }}>
@@ -41,6 +42,9 @@ export default function Board({
           onPieceDrop: ({ sourceSquare, targetSquare }) => {
             if (disabled || !targetSquare) return false;
             return onMove(sourceSquare, targetSquare);
+          },
+          onSquareClick: ({ square }) => {
+            if (onSquareClick) onSquareClick(square);
           },
         }}
       />

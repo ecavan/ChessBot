@@ -27,6 +27,11 @@ export default function App() {
     setLastGamePgn(pgn);
   }, []);
 
+  const handleReviewGame = useCallback((pgn) => {
+    setLastGamePgn(pgn);
+    setActiveMode('review');
+  }, []);
+
   if (!engine.isReady) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -59,7 +64,7 @@ export default function App() {
       </nav>
       <main className="p-6 flex justify-center">
         {activeMode === 'play' && (
-          <PlayMode engine={engine} onGameEnd={handleGameEnd} />
+          <PlayMode engine={engine} onGameEnd={handleGameEnd} onReviewGame={handleReviewGame} />
         )}
         {activeMode === 'openings' && (
           <OpeningSandbox engine={engine} />
