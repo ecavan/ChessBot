@@ -103,7 +103,17 @@ export default function PuzzlesTrainer() {
           setHistory((prev) => [...prev, { san: move.san, isPlayer: false }]);
           setFen(gameRef.current.fen());
           playMoveSound(gameRef.current, move);
-          setSolutionIndex(index + 1);
+          const nextIdx = index + 1;
+          setSolutionIndex(nextIdx);
+
+          // If this was the last move in the solution, puzzle is solved
+          if (nextIdx >= puzzle.solution.length) {
+            setSuccess(true);
+            sounds.success();
+            setFeedback({ type: 'success', text: 'Correct! Puzzle solved.' });
+            setIsAnimating(false);
+            return;
+          }
         }
       } catch {
         // Invalid opponent move in solution data
@@ -114,6 +124,10 @@ export default function PuzzlesTrainer() {
 
   const handleMove = useCallback((from, to) => {
     if (success || isAnimating || !activePuzzle) return false;
+
+    // Only accept moves on the player's turn
+    const currentTurn = gameRef.current.turn() === 'w' ? 'white' : 'black';
+    if (currentTurn !== activePuzzle.playerColor) return false;
 
     const puzzle = activePuzzle;
     const expectedUci = puzzle.solution[solutionIndex];

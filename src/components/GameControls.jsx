@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function GameControls({ onNewGame, onUndo, onFlipBoard, settings, onSettingsChange }) {
+export default function GameControls({ onNewGame, onUndo, onFlipBoard, onClearBoard, settings, onSettingsChange }) {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -24,6 +24,15 @@ export default function GameControls({ onNewGame, onUndo, onFlipBoard, settings,
         >
           Flip
         </button>
+        {onClearBoard && (
+          <button
+            onClick={onClearBoard}
+            className="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+            title="Clear all arrows and highlights"
+          >
+            Clear
+          </button>
+        )}
         <button
           onClick={() => setShowSettings(!showSettings)}
           className="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"

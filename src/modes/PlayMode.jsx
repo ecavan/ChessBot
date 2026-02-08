@@ -435,6 +435,14 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     }
   }, [arrows.length, squareStyles]);
 
+  const handleClearBoard = useCallback(() => {
+    setArrows([]);
+    setSquareStyles({});
+    setHintLevel(0);
+    setHintData(null);
+    setSettings((prev) => ({ ...prev, showThreats: false, showPlayerThreats: false }));
+  }, []);
+
   const handleRequestHint = useCallback(() => {
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
@@ -619,6 +627,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
             onNewGame={handleNewGame}
             onUndo={handleUndo}
             onFlipBoard={handleFlipBoard}
+            onClearBoard={handleClearBoard}
             settings={settings}
             onSettingsChange={handleSettingsChange}
           />
