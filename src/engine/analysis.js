@@ -1,10 +1,13 @@
 export function classifyMove(evalBefore, evalAfter, isWhite) {
-  const before = isWhite ? evalBefore : -evalBefore;
-  const after = isWhite ? evalAfter : -evalAfter;
-  const loss = before - after;
+  // evalBefore: from the moving player's perspective (side to move before the move)
+  // evalAfter: from the OPPONENT's perspective (side to move after the move)
+  // To get loss from the moving player's view:
+  //   playerEvalAfter = -evalAfter (negate opponent's perspective)
+  //   loss = evalBefore - playerEvalAfter = evalBefore - (-evalAfter) = evalBefore + evalAfter
+  const loss = evalBefore + evalAfter;
 
-  if (loss >= 3.0) return { type: 'blunder', symbol: '??', color: '#e74c3c' };
-  if (loss >= 1.5) return { type: 'mistake', symbol: '?', color: '#e67e22' };
+  if (loss >= 2.0) return { type: 'blunder', symbol: '??', color: '#e74c3c' };
+  if (loss >= 1.0) return { type: 'mistake', symbol: '?', color: '#e67e22' };
   if (loss >= 0.5) return { type: 'inaccuracy', symbol: '?!', color: '#f1c40f' };
   if (loss <= -0.5) return { type: 'great', symbol: '!', color: '#2ecc71' };
   return { type: 'good', symbol: '', color: '#95a5a6' };

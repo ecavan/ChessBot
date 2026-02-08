@@ -20,7 +20,7 @@ export default function Board({
   disabled = false,
 }) {
   return (
-    <div style={{ width: 360, maxWidth: '100%', aspectRatio: '1 / 1' }}>
+    <div style={{ width: 360, height: 360 }}>
       <Chessboard
         options={{
           id: 'trainer-board',
@@ -28,6 +28,8 @@ export default function Board({
           boardOrientation: playerColor,
           arrows: convertArrows(arrows),
           squareStyles: squareStyles,
+          clearArrowsOnPositionChange: false,
+          clearArrowsOnClick: false,
           boardStyle: {
             borderRadius: '4px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.5)',

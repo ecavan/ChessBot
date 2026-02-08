@@ -57,7 +57,7 @@ export default function PlayMode({ engine, onGameEnd }) {
   const [settings, setSettings] = useState({
     skillLevel: 5,
     blunderWarnings: true,
-    showThreats: false,
+    showThreats: true,
     showEval: true,
     hintsAvailable: true,
     playerColor: 'white',
@@ -356,6 +356,19 @@ export default function PlayMode({ engine, onGameEnd }) {
     setSettings((prev) => ({ ...prev, skillLevel: diff.skill, engineDepth: diff.depth }));
     engineSetSkillLevel(diff.skill);
   }, [engineSetSkillLevel]);
+
+  // Keyboard shortcut: H for hints
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'h' || e.key === 'H') {
+        if (!isThinking && !gameOver && hintLevel < 3 && settings.hintsAvailable) {
+          handleRequestHint();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isThinking, gameOver, hintLevel, settings.hintsAvailable, handleRequestHint]);
 
   // Compute threat arrows
   const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
