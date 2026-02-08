@@ -19,6 +19,11 @@ function uciToSan(uci, fen) {
 }
 
 export default function ReviewMode({ engine, initialPgn }) {
+  const {
+    getBestMove: engineGetBestMove,
+    stop: engineStop,
+  } = engine;
+
   const [pgnInput, setPgnInput] = useState(initialPgn || '');
   const [analysis, setAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -65,7 +70,7 @@ export default function ReviewMode({ engine, initialPgn }) {
       const isWhite = replay.turn() === 'w';
 
       // Get engine eval + best move of position before the move
-      const resultBefore = await engine.getBestMove(fenBefore, 12);
+      const resultBefore = await engineGetBestMove(fenBefore, 12);
       const evalBefore = resultBefore?.eval ?? 0;
       const bestMoveUci = resultBefore?.move ?? '';
 
@@ -74,7 +79,7 @@ export default function ReviewMode({ engine, initialPgn }) {
       const fenAfter = replay.fen();
 
       // Get engine eval after the move
-      const resultAfter = await engine.getBestMove(fenAfter, 12);
+      const resultAfter = await engineGetBestMove(fenAfter, 12);
       const evalAfter = resultAfter?.eval ?? 0;
 
       const classification = classifyMove(evalBefore, evalAfter, isWhite);
@@ -120,12 +125,12 @@ export default function ReviewMode({ engine, initialPgn }) {
     }
 
     setIsAnalyzing(false);
-  }, [engine]);
+  }, [engineGetBestMove]);
 
   const handleCancel = useCallback(() => {
     cancelRef.current = true;
-    engine.stop();
-  }, [engine]);
+    engineStop();
+  }, [engineStop]);
 
   const navigateToMove = useCallback((index) => {
     if (!analysis || index < 0 || index >= analysis.length) return;

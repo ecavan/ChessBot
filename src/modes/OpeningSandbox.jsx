@@ -5,6 +5,12 @@ import MoveList from '../components/MoveList';
 import { OPENINGS } from '../data/openings';
 
 export default function OpeningSandbox({ engine }) {
+  // Destructure engine: functions are stable, reactive values change
+  const {
+    getBestMove: engineGetBestMove,
+    newGame: engineNewGame,
+  } = engine;
+
   const [selectedOpening, setSelectedOpening] = useState(null);
   const gameRef = useRef(new Chess());
   const [fen, setFen] = useState(gameRef.current.fen());
@@ -41,8 +47,8 @@ export default function OpeningSandbox({ engine }) {
 
   const makeEngineFreeMove = useCallback(async () => {
     setIsThinking(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const result = await engine.getBestMove(gameRef.current.fen(), 12);
+    await new Promise((r) => setTimeout(r, 200));
+    const result = await engineGetBestMove(gameRef.current.fen(), 10);
     if (result?.move) {
       const from = result.move.slice(0, 2);
       const to = result.move.slice(2, 4);
@@ -58,7 +64,7 @@ export default function OpeningSandbox({ engine }) {
       }
     }
     setIsThinking(false);
-  }, [engine]);
+  }, [engineGetBestMove]);
 
   // Auto-play engine's opening moves when it's the engine's turn
   useEffect(() => {
@@ -182,8 +188,8 @@ export default function OpeningSandbox({ engine }) {
     setArrows([]);
     setSquareStyles({});
     setIsThinking(false);
-    engine.newGame();
-  }, [engine]);
+    engineNewGame();
+  }, [engineNewGame]);
 
   // Opening selection screen
   if (!selectedOpening) {

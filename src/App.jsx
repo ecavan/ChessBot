@@ -18,7 +18,8 @@ export default function App() {
   const handleModeChange = useCallback((mode) => {
     setActiveMode(mode);
     engine.newGame();
-  }, [engine]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.newGame]);
 
   const handleGameEnd = useCallback((pgn) => {
     setLastGamePgn(pgn);

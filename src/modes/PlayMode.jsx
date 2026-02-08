@@ -33,6 +33,24 @@ const DIFFICULTIES = [
 ];
 
 export default function PlayMode({ engine, onGameEnd }) {
+  // Destructure engine: functions are stable (useCallback with []), values change
+  const {
+    isReady: engineReady,
+    evaluation: engineEval,
+    topLines: engineTopLines,
+    analyze: engineAnalyze,
+    getBestMove: engineGetBestMove,
+    setSkillLevel: engineSetSkillLevel,
+    setMultiPV: engineSetMultiPV,
+    newGame: engineNewGame,
+  } = engine;
+
+  // Refs for reactive values used inside callbacks (avoids stale closures)
+  const engineTopLinesRef = useRef(engineTopLines);
+  engineTopLinesRef.current = engineTopLines;
+  const engineEvalRef = useRef(engineEval);
+  engineEvalRef.current = engineEval;
+
   const gameRef = useRef(new Chess());
   const [fen, setFen] = useState(gameRef.current.fen());
   const [history, setHistory] = useState([]);
@@ -55,6 +73,8 @@ export default function PlayMode({ engine, onGameEnd }) {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const evalBeforeRef = useRef(null);
   const isThinkingRef = useRef(false);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   const actualColor = settings.playerColor === 'random'
     ? (Math.random() < 0.5 ? 'white' : 'black')
@@ -63,20 +83,21 @@ export default function PlayMode({ engine, onGameEnd }) {
 
   // Set engine skill level when settings change
   useEffect(() => {
-    engine.setSkillLevel(settings.skillLevel);
-  }, [engine, settings.skillLevel]);
+    engineSetSkillLevel(settings.skillLevel);
+  }, [engineSetSkillLevel, settings.skillLevel]);
 
   // Enable MultiPV for hints
   useEffect(() => {
-    engine.setMultiPV(3);
-  }, [engine]);
+    engineSetMultiPV(3);
+  }, [engineSetMultiPV]);
 
   // Run initial analysis for the starting position
   useEffect(() => {
-    if (engine.isReady) {
-      engine.analyze(gameRef.current.fen(), settings.engineDepth);
+    if (engineReady) {
+      engineAnalyze(gameRef.current.fen(), settings.engineDepth);
     }
-  }, [engine, engine.isReady, settings.engineDepth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineReady, engineAnalyze]);
 
   const checkGameOver = useCallback(() => {
     const game = gameRef.current;
@@ -117,7 +138,8 @@ export default function PlayMode({ engine, onGameEnd }) {
     }
 
     try {
-      const result = await engine.getBestMove(game.fen(), settings.engineDepth);
+      const depth = settingsRef.current.engineDepth;
+      const result = await engineGetBestMove(game.fen(), depth);
       if (!result || !result.move || result.move === '(none)') {
         isThinkingRef.current = false;
         setIsThinking(false);
@@ -139,7 +161,7 @@ export default function PlayMode({ engine, onGameEnd }) {
         setFen(game.fen());
 
         if (!checkGameOver()) {
-          engine.analyze(game.fen(), settings.engineDepth);
+          engineAnalyze(game.fen(), settingsRef.current.engineDepth);
         }
       }
     } catch {
@@ -148,14 +170,14 @@ export default function PlayMode({ engine, onGameEnd }) {
 
     isThinkingRef.current = false;
     setIsThinking(false);
-  }, [engine, settings.engineDepth, checkGameOver]);
+  }, [engineGetBestMove, engineAnalyze, checkGameOver]);
 
   // If the engine should move first (player is black), trigger it
   useEffect(() => {
-    if (engine.isReady && boardOrientation === 'black' && gameRef.current.turn() === 'w' && history.length === 0) {
+    if (engineReady && boardOrientation === 'black' && gameRef.current.turn() === 'w' && history.length === 0) {
       makeEngineMove();
     }
-  }, [engine.isReady, boardOrientation, history.length, makeEngineMove]);
+  }, [engineReady, boardOrientation, history.length, makeEngineMove]);
 
   // Always commit the player's move immediately (return true so the piece stays).
   // Then optionally run the blunder check. If it's a blunder, show the alert.
@@ -166,7 +188,7 @@ export default function PlayMode({ engine, onGameEnd }) {
     const game = gameRef.current;
     const fenBeforeMove = game.fen();
     const evalBefore = evalBeforeRef.current;
-    const preMoveBestUci = engine.topLines[0]?.moves[0] || '';
+    const preMoveBestUci = engineTopLinesRef.current[0]?.moves[0] || '';
 
     let move;
     try {
@@ -189,12 +211,12 @@ export default function PlayMode({ engine, onGameEnd }) {
 
     if (checkGameOver()) return true;
 
-    if (settings.blunderWarnings && evalBefore !== null) {
+    if (settingsRef.current.blunderWarnings && evalBefore !== null) {
       // Run blunder check before making the engine move
       isThinkingRef.current = true;
       setIsThinking(true);
 
-      engine.getBestMove(game.fen(), 10).then((result) => {
+      engineGetBestMove(game.fen(), 10).then((result) => {
         if (!result) {
           // Search was cancelled — just make engine move
           isThinkingRef.current = false;
@@ -241,12 +263,12 @@ export default function PlayMode({ engine, onGameEnd }) {
       });
     } else {
       // No blunder check — make engine move right away
-      evalBeforeRef.current = engine.evaluation;
+      evalBeforeRef.current = engineEvalRef.current;
       makeEngineMove();
     }
 
     return true;
-  }, [engine, settings.blunderWarnings, blunderAlert, checkGameOver, makeEngineMove]);
+  }, [engineGetBestMove, blunderAlert, checkGameOver, makeEngineMove]);
 
   // User saw the blunder alert and chose to continue
   const handleBlunderConfirm = useCallback(() => {
@@ -262,8 +284,8 @@ export default function PlayMode({ engine, onGameEnd }) {
     setHistory((prev) => prev.slice(0, -1));
     setCurrentMoveIndex((prev) => prev - 1);
     setFen(game.fen());
-    engine.analyze(game.fen(), settings.engineDepth);
-  }, [engine, settings.engineDepth]);
+    engineAnalyze(game.fen(), settingsRef.current.engineDepth);
+  }, [engineAnalyze]);
 
   const handleUndo = useCallback(() => {
     const game = gameRef.current;
@@ -275,13 +297,14 @@ export default function PlayMode({ engine, onGameEnd }) {
     setCurrentMoveIndex((prev) => Math.max(-1, prev - 2));
     setFen(game.fen());
     setGameOver(null);
-    engine.analyze(game.fen(), settings.engineDepth);
-  }, [history.length, isThinking, engine, settings.engineDepth]);
+    engineAnalyze(game.fen(), settingsRef.current.engineDepth);
+  }, [history.length, isThinking, engineAnalyze]);
 
   const handleNewGame = useCallback(() => {
-    const newColor = settings.playerColor === 'random'
+    const s = settingsRef.current;
+    const newColor = s.playerColor === 'random'
       ? (Math.random() < 0.5 ? 'white' : 'black')
-      : settings.playerColor;
+      : s.playerColor;
 
     gameRef.current = new Chess();
     setFen(gameRef.current.fen());
@@ -298,14 +321,14 @@ export default function PlayMode({ engine, onGameEnd }) {
     setBoardOrientation(newColor);
     evalBeforeRef.current = null;
 
-    engine.newGame();
-    engine.setSkillLevel(settings.skillLevel);
-    engine.setMultiPV(3);
+    engineNewGame();
+    engineSetSkillLevel(s.skillLevel);
+    engineSetMultiPV(3);
 
     setTimeout(() => {
-      engine.analyze(gameRef.current.fen(), settings.engineDepth);
+      engineAnalyze(gameRef.current.fen(), s.engineDepth);
     }, 100);
-  }, [engine, settings]);
+  }, [engineNewGame, engineSetSkillLevel, engineSetMultiPV, engineAnalyze]);
 
   const handleFlipBoard = useCallback(() => {
     setBoardOrientation((prev) => prev === 'white' ? 'black' : 'white');
@@ -314,26 +337,25 @@ export default function PlayMode({ engine, onGameEnd }) {
   const handleRequestHint = useCallback(() => {
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
-    const hint = generateHint(engine.topLines, gameRef.current, newLevel);
+    const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
     setHintData(hint);
     if (hint) {
       setArrows(hint.arrows || []);
       setSquareStyles(hint.squareStyles || {});
     }
-  }, [hintLevel, engine.topLines]);
+  }, [hintLevel]);
 
   const handleSettingsChange = useCallback((newSettings) => {
     setSettings(newSettings);
-    if (newSettings.skillLevel !== settings.skillLevel) {
-      engine.setSkillLevel(newSettings.skillLevel);
+    if (newSettings.skillLevel !== settingsRef.current.skillLevel) {
+      engineSetSkillLevel(newSettings.skillLevel);
     }
-  }, [engine, settings.skillLevel]);
+  }, [engineSetSkillLevel]);
 
   const handleDifficultyChange = useCallback((diff) => {
-    const newSettings = { ...settings, skillLevel: diff.skill, engineDepth: diff.depth };
-    setSettings(newSettings);
-    engine.setSkillLevel(diff.skill);
-  }, [settings, engine]);
+    setSettings((prev) => ({ ...prev, skillLevel: diff.skill, engineDepth: diff.depth }));
+    engineSetSkillLevel(diff.skill);
+  }, [engineSetSkillLevel]);
 
   // Compute threat arrows
   const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
@@ -341,10 +363,10 @@ export default function PlayMode({ engine, onGameEnd }) {
 
   // Store current eval for blunder detection
   useEffect(() => {
-    if (engine.evaluation !== null) {
-      evalBeforeRef.current = engine.evaluation;
+    if (engineEval !== null) {
+      evalBeforeRef.current = engineEval;
     }
-  }, [engine.evaluation]);
+  }, [engineEval]);
 
   const isPlayerTurn = (gameRef.current.turn() === 'w' && boardOrientation === 'white') ||
                        (gameRef.current.turn() === 'b' && boardOrientation === 'black');
@@ -386,7 +408,7 @@ export default function PlayMode({ engine, onGameEnd }) {
 
       <div className="flex gap-4 items-start">
         {settings.showEval && (
-          <EvalBar evaluation={engine.evaluation} playerColor={boardOrientation} />
+          <EvalBar evaluation={engineEval} playerColor={boardOrientation} />
         )}
 
         <Board
