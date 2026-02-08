@@ -8,6 +8,7 @@ export function useStockfish() {
   const [topLines, setTopLines] = useState([]);
   const resolveRef = useRef(null);
   const latestEvalRef = useRef(null);
+  const readyCallbackRef = useRef(null);
 
   useEffect(() => {
     const worker = new Worker('/stockfish/stockfish-17.1-lite-single-03e3232.js');
@@ -16,8 +17,16 @@ export function useStockfish() {
     worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : String(e.data);
 
-      if (line === 'uciok' || line === 'readyok') {
+      if (line === 'uciok') {
         setIsReady(true);
+      }
+
+      if (line === 'readyok') {
+        if (readyCallbackRef.current) {
+          const cb = readyCallbackRef.current;
+          readyCallbackRef.current = null;
+          cb();
+        }
       }
 
       if (line.startsWith('info depth')) {
@@ -69,9 +78,15 @@ export function useStockfish() {
     return () => worker.terminate();
   }, []);
 
-  const analyze = useCallback((fen, depth = 15) => {
+  const analyze = useCallback((fen, depth = 12) => {
     const w = workerRef.current;
     if (!w) return;
+    // Cancel any pending getBestMove — stale bestmove from stop would resolve it incorrectly
+    if (resolveRef.current) {
+      resolveRef.current(null);
+      resolveRef.current = null;
+    }
+    readyCallbackRef.current = null;
     setTopLines([]);
     setBestMove(null);
     w.postMessage('stop');
@@ -79,12 +94,33 @@ export function useStockfish() {
     w.postMessage(`go depth ${depth}`);
   }, []);
 
-  const getBestMove = useCallback((fen, depth = 15) => {
+  const getBestMove = useCallback((fen, depth = 12) => {
     return new Promise((resolve) => {
-      resolveRef.current = resolve;
-      analyze(fen, depth);
+      const w = workerRef.current;
+      if (!w) { resolve(null); return; }
+
+      // Cancel any pending resolve so the stale bestmove from 'stop' doesn't interfere
+      if (resolveRef.current) {
+        resolveRef.current(null);
+        resolveRef.current = null;
+      }
+
+      setTopLines([]);
+      setBestMove(null);
+      w.postMessage('stop');
+
+      // Use isready as a fence: Stockfish processes commands in order,
+      // so readyok arrives AFTER the stale bestmove from stop is emitted.
+      // By the time readyok fires, resolveRef is still null, so the stale
+      // bestmove was harmlessly ignored. Now we set the real resolve and start.
+      readyCallbackRef.current = () => {
+        resolveRef.current = resolve;
+        w.postMessage(`position fen ${fen}`);
+        w.postMessage(`go depth ${depth}`);
+      };
+      w.postMessage('isready');
     });
-  }, [analyze]);
+  }, []);
 
   const setSkillLevel = useCallback((level) => {
     workerRef.current?.postMessage(`setoption name Skill Level value ${level}`);
@@ -97,6 +133,11 @@ export function useStockfish() {
   const newGame = useCallback(() => {
     const w = workerRef.current;
     if (!w) return;
+    if (resolveRef.current) {
+      resolveRef.current(null);
+      resolveRef.current = null;
+    }
+    readyCallbackRef.current = null;
     w.postMessage('stop');
     w.postMessage('ucinewgame');
     w.postMessage('isready');

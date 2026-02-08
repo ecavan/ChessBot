@@ -28,13 +28,13 @@ export default function PlayMode({ engine, onGameEnd }) {
   const [fen, setFen] = useState(gameRef.current.fen());
   const [history, setHistory] = useState([]);
   const [settings, setSettings] = useState({
-    skillLevel: 10,
+    skillLevel: 5,
     blunderWarnings: true,
     showThreats: false,
     showEval: true,
     hintsAvailable: true,
     playerColor: 'white',
-    engineDepth: 15,
+    engineDepth: 10,
   });
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
@@ -99,7 +99,7 @@ export default function PlayMode({ engine, onGameEnd }) {
     setArrows([]);
     setSquareStyles({});
 
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 200));
 
     const game = gameRef.current;
     if (game.isGameOver()) {
@@ -175,11 +175,12 @@ export default function PlayMode({ engine, onGameEnd }) {
 
       // Start async blunder check
       pendingMoveRef.current = { from, to, move, evalBefore, isWhite };
-      engine.getBestMove(fenAfterMove, 12).then((result) => {
+      engine.getBestMove(fenAfterMove, 10).then((result) => {
+        if (!result) return; // Search was cancelled
         const pending = pendingMoveRef.current;
         if (!pending || pending.from !== from || pending.to !== to) return;
 
-        const evalAfter = result?.eval ?? 0;
+        const evalAfter = result.eval ?? 0;
         const classification = classifyMove(evalBefore, evalAfter, isWhite);
 
         if (classification.type === 'blunder' || classification.type === 'mistake') {
@@ -350,8 +351,44 @@ export default function PlayMode({ engine, onGameEnd }) {
   const isPlayerTurn = (gameRef.current.turn() === 'w' && boardOrientation === 'white') ||
                        (gameRef.current.turn() === 'b' && boardOrientation === 'black');
 
+  const DIFFICULTIES = [
+    { label: 'Beginner', skill: 0, depth: 6 },
+    { label: 'Easy', skill: 3, depth: 8 },
+    { label: 'Medium', skill: 6, depth: 10 },
+    { label: 'Hard', skill: 12, depth: 12 },
+    { label: 'Expert', skill: 18, depth: 14 },
+    { label: 'Max', skill: 20, depth: 16 },
+  ];
+
+  const currentDifficulty = DIFFICULTIES.find(
+    (d) => d.skill === settings.skillLevel && d.depth === settings.engineDepth
+  );
+
+  const handleDifficultyChange = useCallback((diff) => {
+    const newSettings = { ...settings, skillLevel: diff.skill, engineDepth: diff.depth };
+    setSettings(newSettings);
+    engine.setSkillLevel(diff.skill);
+  }, [settings, engine]);
+
   return (
     <div className="flex flex-col items-center gap-4">
+      {/* Difficulty selector */}
+      <div className="flex gap-1.5">
+        {DIFFICULTIES.map((diff) => (
+          <button
+            key={diff.label}
+            onClick={() => handleDifficultyChange(diff)}
+            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+              currentDifficulty?.label === diff.label
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            {diff.label}
+          </button>
+        ))}
+      </div>
+
       <div className="text-sm text-gray-400">
         {gameOver ? (
           <span className="text-yellow-300 font-bold">{gameOver}</span>
