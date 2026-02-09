@@ -11,6 +11,7 @@ import { generateHint } from '../engine/hints';
 import { getThreats, getPlayerThreats } from '../utils/arrows';
 import { OPENINGS } from '../data/openings';
 import { playMoveSound } from '../utils/sounds';
+import { estimateElo, computeACPL } from '../utils/elo';
 
 function uciToSan(uci, fen) {
   try {
@@ -59,6 +60,8 @@ function isBookMove(uciHistory) {
     return uciHistory.every((m, i) => m === opening.moves[i]);
   });
 }
+
+const ANALYSIS_DEPTH = 16;
 
 const DIFFICULTIES = [
   { label: 'Beginner', skill: 0, depth: 5 },
@@ -136,7 +139,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   // Run initial analysis for the starting position
   useEffect(() => {
     if (engineReady) {
-      engineAnalyze(gameRef.current.fen(), settings.engineDepth);
+      engineAnalyze(gameRef.current.fen(), ANALYSIS_DEPTH);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineReady, engineAnalyze]);
@@ -212,7 +215,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
         setFen(game.fen());
 
         if (!checkGameOver()) {
-          engineAnalyze(game.fen(), settingsRef.current.engineDepth);
+          engineAnalyze(game.fen(), ANALYSIS_DEPTH);
         }
       }
     } catch {
@@ -284,7 +287,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
       isThinkingRef.current = true;
       setIsThinking(true);
 
-      engineGetBestMove(game.fen(), 10).then((result) => {
+      engineGetBestMove(game.fen(), ANALYSIS_DEPTH).then((result) => {
         if (!result) {
           isThinkingRef.current = false;
           setIsThinking(false);
@@ -304,12 +307,12 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
         });
         evalBeforeRef.current = evalAfter;
 
-        // Update this move's classification in history
+        // Update this move's classification and eval data in history
         setHistory((prev) => {
           const updated = [...prev];
           for (let i = updated.length - 1; i >= 0; i--) {
             if (updated[i].classification === null) {
-              updated[i] = { ...updated[i], classification };
+              updated[i] = { ...updated[i], classification, evalBefore, evalAfter };
               break;
             }
           }
@@ -371,7 +374,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setHistory((prev) => prev.slice(0, -1));
     setCurrentMoveIndex((prev) => prev - 1);
     setFen(game.fen());
-    engineAnalyze(game.fen(), settingsRef.current.engineDepth);
+    engineAnalyze(game.fen(), ANALYSIS_DEPTH);
   }, [engineAnalyze]);
 
   const handleUndo = useCallback(() => {
@@ -386,7 +389,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setFen(game.fen());
     setGameOver(null);
     setMoveIndicator(null);
-    engineAnalyze(game.fen(), settingsRef.current.engineDepth);
+    engineAnalyze(game.fen(), ANALYSIS_DEPTH);
   }, [history.length, isThinking, engineAnalyze]);
 
   const handleNewGame = useCallback(() => {
@@ -418,7 +421,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     engineSetMultiPV(3);
 
     setTimeout(() => {
-      engineAnalyze(gameRef.current.fen(), s.engineDepth);
+      engineAnalyze(gameRef.current.fen(), ANALYSIS_DEPTH);
     }, 100);
   }, [engineNewGame, engineSetSkillLevel, engineSetMultiPV, engineAnalyze]);
 
@@ -518,16 +521,37 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     (d) => d.skill === settings.skillLevel && d.depth === settings.engineDepth
   );
 
-  // Compute game summary counts
-  const summaryCounts = gameOver ? {
-    brilliant: history.filter((m) => m.classification?.type === 'brilliant').length,
-    great: history.filter((m) => m.classification?.type === 'great').length,
-    best: history.filter((m) => m.classification?.type === 'best').length,
-    blunders: history.filter((m) => m.classification?.type === 'blunder').length,
-    mistakes: history.filter((m) => m.classification?.type === 'mistake').length,
-    misses: history.filter((m) => m.classification?.type === 'miss').length,
-    inaccuracies: history.filter((m) => m.classification?.type === 'inaccuracy').length,
-  } : null;
+  // Compute game summary counts and ELO estimate
+  const summaryCounts = gameOver ? (() => {
+    const playerIsWhite = boardOrientation === 'white';
+    const playerMoves = history.filter((_, i) => playerIsWhite ? i % 2 === 0 : i % 2 === 1);
+    const classified = playerMoves.filter((m) => m.classification);
+
+    const counts = {
+      brilliant: classified.filter((m) => m.classification.type === 'brilliant').length,
+      great: classified.filter((m) => m.classification.type === 'great').length,
+      best: classified.filter((m) => m.classification.type === 'best').length,
+      good: classified.filter((m) => m.classification.type === 'good').length,
+      okay: classified.filter((m) => m.classification.type === 'okay').length,
+      book: classified.filter((m) => m.classification.type === 'book').length,
+      blunders: classified.filter((m) => m.classification.type === 'blunder').length,
+      mistakes: classified.filter((m) => m.classification.type === 'mistake').length,
+      misses: classified.filter((m) => m.classification.type === 'miss').length,
+      inaccuracies: classified.filter((m) => m.classification.type === 'inaccuracy').length,
+    };
+
+    // Compute ELO estimate from player's moves
+    const movesWithEval = classified.filter((m) => m.evalBefore != null && m.evalAfter != null);
+    const acpl = computeACPL(movesWithEval);
+    const eloData = estimateElo(acpl, {
+      brilliant: counts.brilliant, best: counts.best, great: counts.great,
+      good: counts.good, okay: counts.okay, book: counts.book,
+      inaccuracy: counts.inaccuracies, miss: counts.misses,
+      mistake: counts.mistakes, blunder: counts.blunders,
+    }, classified.length);
+
+    return { ...counts, eloData };
+  })() : null;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -637,6 +661,19 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
       {gameOver && summaryCounts && (
         <div className="bg-gray-800 rounded-lg p-4 max-w-md text-center">
           <h3 className="text-lg font-bold mb-2">{gameOver}</h3>
+
+          {/* ELO estimate */}
+          {summaryCounts.eloData && (
+            <div className="mb-3 pb-3 border-b border-gray-700">
+              <div className="text-3xl font-black text-white">{summaryCounts.eloData.elo}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Estimated Rating</div>
+              <div className="flex justify-center gap-4 mt-1.5 text-xs text-gray-500">
+                <span>Accuracy: {summaryCounts.eloData.accuracy}%</span>
+                <span>ACPL: {summaryCounts.eloData.acpl}</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
             {summaryCounts.brilliant > 0 && (
               <span style={{ color: '#26c6da' }}>{summaryCounts.brilliant} brilliant</span>

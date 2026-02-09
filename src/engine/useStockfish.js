@@ -9,6 +9,7 @@ export function useStockfish() {
   const resolveRef = useRef(null);
   const latestEvalRef = useRef(null);
   const readyCallbackRef = useRef(null);
+  const pendingAnalyzeRef = useRef(false);
 
   useEffect(() => {
     const worker = new Worker('/stockfish/stockfish-17.1-lite-single-03e3232.js');
@@ -53,7 +54,6 @@ export function useStockfish() {
 
           if (pvIndex === 0) {
             latestEvalRef.current = evalValue;
-            setEvaluation(evalValue);
           }
         }
       }
@@ -61,6 +61,10 @@ export function useStockfish() {
       if (line.startsWith('bestmove')) {
         const move = line.split(' ')[1];
         setBestMove(move);
+        if (pendingAnalyzeRef.current) {
+          setEvaluation(latestEvalRef.current);
+          pendingAnalyzeRef.current = false;
+        }
         if (resolveRef.current) {
           resolveRef.current({ move, eval: latestEvalRef.current });
           resolveRef.current = null;
@@ -87,6 +91,7 @@ export function useStockfish() {
       resolveRef.current = null;
     }
     readyCallbackRef.current = null;
+    pendingAnalyzeRef.current = true;
     setTopLines([]);
     setBestMove(null);
     w.postMessage('stop');
@@ -105,6 +110,7 @@ export function useStockfish() {
         resolveRef.current = null;
       }
 
+      pendingAnalyzeRef.current = false;
       setTopLines([]);
       setBestMove(null);
       w.postMessage('stop');
@@ -138,6 +144,7 @@ export function useStockfish() {
       resolveRef.current = null;
     }
     readyCallbackRef.current = null;
+    pendingAnalyzeRef.current = false;
     w.postMessage('stop');
     w.postMessage('ucinewgame');
     w.postMessage('isready');

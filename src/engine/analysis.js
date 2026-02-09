@@ -37,9 +37,10 @@ export function classifyMove(evalBefore, evalAfter, isWhite, moveInfo) {
     return { type: 'great', symbol: '!', color: '#5dadec', label: 'Great' };
   }
 
-  // Best: played the engine's top move
+  // Best: played the engine's top move — always classify as best regardless of
+  // eval change, since eval noise from search depth shouldn't penalize the player
   if (moveInfo?.playerUci && moveInfo?.bestUci &&
-      moveInfo.playerUci === moveInfo.bestUci && loss < 0.5) {
+      moveInfo.playerUci === moveInfo.bestUci) {
     return { type: 'best', symbol: '', color: '#96bc4b', label: 'Best' };
   }
 

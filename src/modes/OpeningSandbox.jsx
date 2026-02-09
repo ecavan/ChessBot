@@ -81,7 +81,7 @@ export default function OpeningSandbox({ engine }) {
     }
     setIsThinking(false);
     // Start analysis for hints after engine moves
-    engineAnalyze(gameRef.current.fen(), 10);
+    engineAnalyze(gameRef.current.fen(), 16);
   }, [engineGetBestMove, engineAnalyze]);
 
   // Enable MultiPV for hints in free play
@@ -218,7 +218,7 @@ export default function OpeningSandbox({ engine }) {
     setHintLevel(0);
     setHintData(null);
     setFeedback({ type: 'complete', text: 'Move taken back. Your turn.' });
-    engineAnalyze(game.fen(), 10);
+    engineAnalyze(game.fen(), 16);
   }, [isOpeningPhase, isThinking, history.length, engineAnalyze]);
 
   const handleBoardClick = useCallback(() => {

@@ -27,22 +27,38 @@ export default function ReviewPanel({ analysis, currentIndex, onNavigate, summar
   return (
     <div className="bg-gray-800 rounded p-3">
       {summary && (
-        <div className="flex gap-3 mb-3 pb-2 border-b border-gray-700 text-xs flex-wrap">
-          {summary.brilliancies > 0 && (
-            <span style={{ color: '#26c6da' }}>{summary.brilliancies} brilliant</span>
+        <div className="mb-3 pb-2 border-b border-gray-700">
+          {/* ELO estimates */}
+          {summary.whiteElo && summary.blackElo && (
+            <div className="flex justify-between mb-2 pb-2 border-b border-gray-700">
+              <div className="text-center flex-1">
+                <div className="text-lg font-bold text-white">{summary.whiteElo.elo}</div>
+                <div className="text-[10px] text-gray-400">White · {summary.whiteElo.accuracy}%</div>
+              </div>
+              <div className="text-[10px] text-gray-600 self-center">EST. RATING</div>
+              <div className="text-center flex-1">
+                <div className="text-lg font-bold text-white">{summary.blackElo.elo}</div>
+                <div className="text-[10px] text-gray-400">Black · {summary.blackElo.accuracy}%</div>
+              </div>
+            </div>
           )}
-          {summary.best > 0 && (
-            <span style={{ color: '#96bc4b' }}>{summary.best} best</span>
-          )}
-          {summary.great > 0 && (
-            <span style={{ color: '#5dadec' }}>{summary.great} great</span>
-          )}
-          <span className="text-red-400">{summary.blunders} blunders</span>
-          <span className="text-orange-400">{summary.mistakes} mistakes</span>
-          {summary.misses > 0 && (
-            <span className="text-orange-400">{summary.misses} misses</span>
-          )}
-          <span style={{ color: '#f7c631' }}>{summary.inaccuracies} inaccuracies</span>
+          <div className="flex gap-3 text-xs flex-wrap">
+            {summary.brilliancies > 0 && (
+              <span style={{ color: '#26c6da' }}>{summary.brilliancies} brilliant</span>
+            )}
+            {summary.best > 0 && (
+              <span style={{ color: '#96bc4b' }}>{summary.best} best</span>
+            )}
+            {summary.great > 0 && (
+              <span style={{ color: '#5dadec' }}>{summary.great} great</span>
+            )}
+            <span className="text-red-400">{summary.blunders} blunders</span>
+            <span className="text-orange-400">{summary.mistakes} mistakes</span>
+            {summary.misses > 0 && (
+              <span className="text-orange-400">{summary.misses} misses</span>
+            )}
+            <span style={{ color: '#f7c631' }}>{summary.inaccuracies} inaccuracies</span>
+          </div>
         </div>
       )}
 

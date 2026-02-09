@@ -4,6 +4,7 @@ import Board from '../components/Board';
 import EvalBar from '../components/EvalBar';
 import ReviewPanel from '../components/ReviewPanel';
 import { classifyMove, explainMove } from '../engine/analysis';
+import { estimateElo, computeACPL } from '../utils/elo';
 
 function uciToSan(uci, fen) {
   try {
@@ -136,7 +137,22 @@ export default function ReviewMode({ engine, initialPgn }) {
       const misses = results.filter((r) => r.classification.type === 'miss').length;
       const inaccuracies = results.filter((r) => r.classification.type === 'inaccuracy').length;
 
-      setSummary({ brilliancies, best, great, blunders, mistakes, misses, inaccuracies, totalMoves: moves.length });
+      // Compute ELO estimates for both sides
+      const computeSideElo = (side) => {
+        const isW = side === 'white';
+        const sideMoves = results.filter((r) => r.isWhite === isW);
+        const acpl = computeACPL(sideMoves);
+        const cls = {};
+        for (const m of sideMoves) {
+          const t = m.classification.type;
+          cls[t] = (cls[t] || 0) + 1;
+        }
+        return estimateElo(acpl, cls, sideMoves.length);
+      };
+      const whiteElo = computeSideElo('white');
+      const blackElo = computeSideElo('black');
+
+      setSummary({ brilliancies, best, great, blunders, mistakes, misses, inaccuracies, totalMoves: moves.length, whiteElo, blackElo });
       setAnalysis(results);
       setProgress(100);
 
