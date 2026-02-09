@@ -110,12 +110,17 @@ export default function OpeningSandbox({ engine }) {
     }
 
     // Opening phase complete - transition to free play
-    if (moveIndex >= opening.moves.length && isEngineTurn) {
+    if (moveIndex >= opening.moves.length) {
       setIsOpeningPhase(false);
       setFeedback({ type: 'complete', text: 'Opening complete! Now playing freely against the engine.' });
-      makeEngineFreeMove();
+      if (isEngineTurn) {
+        makeEngineFreeMove();
+      } else {
+        // Player's turn first in free play — start analysis for eval bar and hints
+        engineAnalyze(gameRef.current.fen(), 16);
+      }
     }
-  }, [opening, moveIndex, fen, isOpeningPhase, playerIsWhite, makeBookMove, makeEngineFreeMove]);
+  }, [opening, moveIndex, fen, isOpeningPhase, playerIsWhite, makeBookMove, makeEngineFreeMove, engineAnalyze]);
 
   const handleMove = useCallback((from, to) => {
     if (!opening) return false;
