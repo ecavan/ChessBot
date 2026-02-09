@@ -89,6 +89,16 @@ export default function OpeningSandbox({ engine }) {
     engineSetMultiPV(3);
   }, [engineSetMultiPV]);
 
+  const startFreePlay = useCallback((isEngineTurnNext) => {
+    setIsOpeningPhase(false);
+    setFeedback({ type: 'complete', text: 'Opening complete! Now playing freely against the engine.' });
+    if (isEngineTurnNext) {
+      makeEngineFreeMove();
+    } else {
+      engineAnalyze(gameRef.current.fen(), 16);
+    }
+  }, [makeEngineFreeMove, engineAnalyze]);
+
   // Auto-play engine's opening moves when it's the engine's turn
   useEffect(() => {
     if (!opening || !isOpeningPhase) return;
@@ -104,23 +114,15 @@ export default function OpeningSandbox({ engine }) {
         if (move) {
           setMoveHistory((prev) => (prev ? prev + ' ' : '') + engineMoveUci);
           setMoveIndex((prev) => prev + 1);
+          // If this was the last opening move, transition immediately
+          if (moveIndex + 1 >= opening.moves.length) {
+            startFreePlay(false); // Player's turn after engine's last book move
+          }
         }
       }, 500);
       return () => clearTimeout(timer);
     }
-
-    // Opening phase complete - transition to free play
-    if (moveIndex >= opening.moves.length) {
-      setIsOpeningPhase(false);
-      setFeedback({ type: 'complete', text: 'Opening complete! Now playing freely against the engine.' });
-      if (isEngineTurn) {
-        makeEngineFreeMove();
-      } else {
-        // Player's turn first in free play — start analysis for eval bar and hints
-        engineAnalyze(gameRef.current.fen(), 16);
-      }
-    }
-  }, [opening, moveIndex, fen, isOpeningPhase, playerIsWhite, makeBookMove, makeEngineFreeMove, engineAnalyze]);
+  }, [opening, moveIndex, fen, isOpeningPhase, playerIsWhite, makeBookMove, startFreePlay]);
 
   const handleMove = useCallback((from, to) => {
     if (!opening) return false;
@@ -153,6 +155,11 @@ export default function OpeningSandbox({ engine }) {
         setMoveIndex((prev) => prev + 1);
         setHistory((prev) => [...prev, { san: move.san, classification: { type: 'great', symbol: '!', color: '#2ecc71' } }]);
         setFen(game.fen());
+
+        // If this was the last opening move, transition to free play immediately
+        if (moveIndex + 1 >= opening.moves.length) {
+          startFreePlay(true); // Engine's turn after player's last book move
+        }
         return true;
       } else {
         // Deviation from book
@@ -207,7 +214,7 @@ export default function OpeningSandbox({ engine }) {
       }
       return true;
     }
-  }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove]);
+  }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove, startFreePlay]);
 
   const handleUndo = useCallback(() => {
     if (isOpeningPhase || isThinking) return;
