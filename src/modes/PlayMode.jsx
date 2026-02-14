@@ -77,8 +77,8 @@ function getRandomBookMove(uciHistory) {
   return unique[Math.floor(Math.random() * unique.length)];
 }
 
-const ANALYSIS_DEPTH = 20;
-const HINT_DEPTH = 16;
+const ANALYSIS_DEPTH = 16;
+const HINT_DEPTH = 14;
 
 const DIFFICULTIES = [
   { label: 'Beginner', skill: 0, depth: 5 },

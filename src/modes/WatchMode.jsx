@@ -9,7 +9,7 @@ import { estimateElo, computeACPL } from '../utils/elo';
 import { getEloDisplay } from '../utils/eloDisplay';
 import { OPENINGS } from '../data/openings';
 
-const WATCH_DEPTH = 20;
+const WATCH_DEPTH = 16;
 const openingKeys = Object.keys(OPENINGS);
 
 // Pick a random opening and return its book moves

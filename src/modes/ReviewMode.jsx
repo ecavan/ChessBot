@@ -87,7 +87,7 @@ export default function ReviewMode({ engine, initialPgn }) {
       const isWhite = replay.turn() === 'w';
 
       // Get engine eval + best move of position before the move
-      const resultBefore = await engineGetBestMove(fenBefore, 18);
+      const resultBefore = await engineGetBestMove(fenBefore, 16);
       const evalBefore = resultBefore?.eval ?? 0;
       const bestMoveUci = resultBefore?.move ?? '';
 
@@ -96,7 +96,7 @@ export default function ReviewMode({ engine, initialPgn }) {
       const fenAfter = replay.fen();
 
       // Get engine eval after the move
-      const resultAfter = await engineGetBestMove(fenAfter, 18);
+      const resultAfter = await engineGetBestMove(fenAfter, 16);
       const evalAfter = resultAfter?.eval ?? 0;
 
       const playerUci = moves[i].from + moves[i].to + (moves[i].promotion || '');

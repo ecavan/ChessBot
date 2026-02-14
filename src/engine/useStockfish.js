@@ -14,25 +14,13 @@ export function useStockfish() {
   const currentMultiPVRef = useRef(1);
 
   useEffect(() => {
-    if (typeof SharedArrayBuffer === 'undefined') {
-      setEngineError('SharedArrayBuffer not available. Cross-origin isolation headers may be missing.');
-      console.error('SharedArrayBuffer not available — cannot load multi-threaded Stockfish.');
-      return;
-    }
-
-    const worker = new Worker('/stockfish/stockfish-17.1-lite-51f59da.js');
+    const worker = new Worker('/stockfish/stockfish-17.1-lite-single-03e3232.js');
     workerRef.current = worker;
 
     worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : String(e.data);
 
       if (line === 'uciok') {
-        // Configure threads based on hardware (half of available cores, min 2, max 4)
-        const threads = Math.min(
-          Math.max(2, Math.floor((navigator.hardwareConcurrency || 2) / 2)),
-          4
-        );
-        worker.postMessage(`setoption name Threads value ${threads}`);
         setIsReady(true);
       }
 
@@ -96,7 +84,7 @@ export function useStockfish() {
     return () => worker.terminate();
   }, []);
 
-  const analyze = useCallback((fen, depth = 20) => {
+  const analyze = useCallback((fen, depth = 16) => {
     const w = workerRef.current;
     if (!w) return;
     // Cancel any pending getBestMove — stale bestmove from stop would resolve it incorrectly
@@ -117,7 +105,7 @@ export function useStockfish() {
     w.postMessage('isready');
   }, []);
 
-  const getBestMove = useCallback((fen, depth = 20) => {
+  const getBestMove = useCallback((fen, depth = 16) => {
     return new Promise((resolve) => {
       const w = workerRef.current;
       if (!w) { resolve(null); return; }
