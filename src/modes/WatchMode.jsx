@@ -40,7 +40,6 @@ export default function WatchMode({ engine }) {
   const [openingName, setOpeningName] = useState('');
   const [displayEval, setDisplayEval] = useState(null);
   const isThinkingRef = useRef(false);
-  const evalBeforeRef = useRef(null);
   const autoPlayRef = useRef(false);
   autoPlayRef.current = autoPlay;
   const bookMovesRef = useRef([]);
@@ -57,12 +56,10 @@ export default function WatchMode({ engine }) {
     engineAnalyze(gameRef.current.fen(), WATCH_DEPTH);
   }, [engineSetSkillLevel, engineSetMultiPV, engineAnalyze]);
 
-  // Store eval for classification + normalize for display
+  // Normalize engine eval for the eval bar display
+  // (evalBefore for classification is now captured directly from getBestMove in makeNextMove)
   useEffect(() => {
     if (engineEval !== null) {
-      evalBeforeRef.current = engineEval;
-      // Normalize to white's perspective for the eval bar
-      // engineEval is from side-to-move perspective (Stockfish convention)
       const turn = gameRef.current.turn();
       setDisplayEval(turn === 'b' ? -engineEval : engineEval);
     }
@@ -74,13 +71,16 @@ export default function WatchMode({ engine }) {
     setIsThinking(true);
 
     const game = gameRef.current;
-    const evalBefore = evalBeforeRef.current;
     const fenBefore = game.fen();
 
     try {
-      // Play book moves during the opening phase
+      // Always get a full-depth eval of the current position via getBestMove
+      // This ensures evalBefore is at the same depth as evalAfter (no depth mismatch)
       let uciMove;
+      let evalBefore;
       if (bookIndexRef.current < bookMovesRef.current.length) {
+        const evalResult = await engineGetBestMove(game.fen(), WATCH_DEPTH);
+        evalBefore = evalResult?.eval ?? null;
         uciMove = bookMovesRef.current[bookIndexRef.current];
         bookIndexRef.current++;
       } else {
@@ -91,6 +91,7 @@ export default function WatchMode({ engine }) {
           return;
         }
         uciMove = result.move;
+        evalBefore = result.eval ?? null;
       }
 
       const from = uciMove.slice(0, 2);
@@ -103,12 +104,13 @@ export default function WatchMode({ engine }) {
 
         // Classify the move if we have eval data
         let classification = null;
+        let evalAfterResult = null;
         if (evalBefore !== null) {
           const classResult = await engineGetBestMove(game.fen(), WATCH_DEPTH);
           if (classResult) {
-            const evalAfter = classResult.eval ?? 0;
+            evalAfterResult = classResult.eval ?? 0;
             const isWhite = move.color === 'w';
-            classification = classifyMove(evalBefore, evalAfter, isWhite, {
+            classification = classifyMove(evalBefore, evalAfterResult, isWhite, {
               piece: move.piece,
               captured: move.captured,
               to: move.to,
@@ -119,10 +121,8 @@ export default function WatchMode({ engine }) {
               playerUci: uciMove,
               bestUci: uciMove,
             });
-            evalBeforeRef.current = evalAfter;
             // Normalize to white's perspective for the eval bar
-            // evalAfter is from new side-to-move's perspective
-            setDisplayEval(move.color === 'w' ? -evalAfter : evalAfter);
+            setDisplayEval(move.color === 'w' ? -evalAfterResult : evalAfterResult);
           }
         }
 
@@ -131,7 +131,7 @@ export default function WatchMode({ engine }) {
           fen: game.fen(),
           classification,
           evalBefore,
-          evalAfter: evalBeforeRef.current,
+          evalAfter: evalAfterResult,
         }]);
         setCurrentMoveIndex((prev) => prev + 1);
         setFen(game.fen());
@@ -180,7 +180,6 @@ export default function WatchMode({ engine }) {
     setGameOver(null);
     setIsThinking(false);
     isThinkingRef.current = false;
-    evalBeforeRef.current = null;
     setDisplayEval(null);
     setAutoPlay(false);
 

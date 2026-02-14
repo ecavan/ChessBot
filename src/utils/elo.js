@@ -61,7 +61,9 @@ export function computeACPL(moves) {
   let total = 0;
   for (const m of moves) {
     const loss = (m.evalBefore + m.evalAfter) * 100; // pawns → centipawns
-    total += Math.max(0, loss); // only count losses, not gains
+    // Cap per-move loss at 300cp to prevent eval noise / depth inconsistency
+    // from inflating the average (standard practice in chess analysis tools)
+    total += Math.min(300, Math.max(0, loss));
   }
   return total / moves.length;
 }
