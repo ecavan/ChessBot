@@ -381,6 +381,7 @@ export default function ReviewMode({ engine, initialPgn, preferences = {} }) {
           playerColor="white"
           disabled={false}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />

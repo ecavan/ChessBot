@@ -351,6 +351,7 @@ export default function PuzzlesTrainer({ preferences = {} }) {
           disabled={success || isAnimating}
           onSquareClick={handleBoardClick}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />

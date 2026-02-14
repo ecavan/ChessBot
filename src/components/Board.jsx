@@ -1,5 +1,6 @@
 import { Chessboard } from 'react-chessboard';
 import { BOARD_THEMES } from '../data/boardThemes';
+import { PIECE_STYLES } from '../data/pieceStyles';
 
 function isLightSquare(sq) {
   const file = sq.charCodeAt(0) - 97;
@@ -104,10 +105,12 @@ export default function Board({
   disabled = false,
   onSquareClick,
   theme = 'classic',
+  pieceStyle = 'classic',
   lastMove = null,
   boardSize = 360,
 }) {
   const themeObj = BOARD_THEMES[theme] || BOARD_THEMES.classic;
+  const piecesObj = PIECE_STYLES[pieceStyle] || undefined;
 
   // Compute last-move highlight styles
   let lastMoveHighlights = {};
@@ -142,6 +145,7 @@ export default function Board({
             },
             darkSquareStyle: { backgroundColor: themeObj.dark },
             lightSquareStyle: { backgroundColor: themeObj.light },
+            ...(piecesObj && { pieces: piecesObj }),
             allowDragging: !disabled,
             animationDurationInMs: 150,
             onPieceDrop: ({ sourceSquare, targetSquare }) => {

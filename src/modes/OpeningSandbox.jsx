@@ -365,6 +365,7 @@ export default function OpeningSandbox({ engine, preferences = {} }) {
           disabled={!isPlayerTurn || isThinking}
           onSquareClick={handleBoardClick}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />

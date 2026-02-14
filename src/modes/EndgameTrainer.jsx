@@ -297,6 +297,7 @@ export default function EndgameTrainer({ engine, preferences = {} }) {
           disabled={isThinking || success || gameOverDraw}
           onSquareClick={handleBoardClick}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />

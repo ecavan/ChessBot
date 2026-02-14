@@ -257,6 +257,7 @@ export default function WatchMode({ engine, preferences = {} }) {
           playerColor={boardOrientation}
           disabled={true}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />

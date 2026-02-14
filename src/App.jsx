@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useStockfish } from './engine/useStockfish';
 import { usePreferences } from './hooks/usePreferences';
 import { BOARD_THEMES } from './data/boardThemes';
+import { PIECE_STYLE_NAMES } from './data/pieceStyles';
 import PlayMode from './modes/PlayMode';
 import OpeningSandbox from './modes/OpeningSandbox';
 import ReviewMode from './modes/ReviewMode';
@@ -19,6 +20,7 @@ const MODES = [
 ];
 
 const THEME_KEYS = Object.keys(BOARD_THEMES);
+const PIECE_STYLE_KEYS = Object.keys(PIECE_STYLE_NAMES);
 
 export default function App() {
   const engine = useStockfish();
@@ -85,29 +87,50 @@ export default function App() {
           </button>
         ))}
 
-        {/* Theme picker */}
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 mr-1">Theme</span>
-          {THEME_KEYS.map((key) => {
-            const t = BOARD_THEMES[key];
-            const isActive = prefs.boardTheme === key;
-            return (
-              <button
-                key={key}
-                onClick={() => updatePrefs({ boardTheme: key })}
-                title={t.name}
-                className="transition-transform hover:scale-110"
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 4,
-                  background: `linear-gradient(135deg, ${t.light} 50%, ${t.dark} 50%)`,
-                  border: isActive ? '2px solid #60a5fa' : '2px solid transparent',
-                  boxShadow: isActive ? '0 0 6px rgba(96,165,250,0.5)' : 'none',
-                }}
-              />
-            );
-          })}
+        {/* Theme + Piece style pickers */}
+        <div className="ml-auto flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 mr-1">Board</span>
+            {THEME_KEYS.map((key) => {
+              const t = BOARD_THEMES[key];
+              const isActive = prefs.boardTheme === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => updatePrefs({ boardTheme: key })}
+                  title={t.name}
+                  className="transition-transform hover:scale-110"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 4,
+                    background: `linear-gradient(135deg, ${t.light} 50%, ${t.dark} 50%)`,
+                    border: isActive ? '2px solid #60a5fa' : '2px solid transparent',
+                    boxShadow: isActive ? '0 0 6px rgba(96,165,250,0.5)' : 'none',
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-500 mr-1">Pieces</span>
+            {PIECE_STYLE_KEYS.map((key) => {
+              const isActive = prefs.pieceStyle === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => updatePrefs({ pieceStyle: key })}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-200'
+                  }`}
+                >
+                  {PIECE_STYLE_NAMES[key]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
       <main className="p-6 flex justify-center">

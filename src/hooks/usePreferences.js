@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-const DEFAULTS = { boardTheme: 'classic' };
+const DEFAULTS = { boardTheme: 'classic', pieceStyle: 'classic' };
 
 export function usePreferences() {
   const [prefs, setPrefs] = useState(() => {

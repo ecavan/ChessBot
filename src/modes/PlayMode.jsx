@@ -718,6 +718,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame, preferences 
           disabled={isThinking || !!gameOver || !!blunderAlert}
           onSquareClick={handleBoardClick}
           theme={preferences.boardTheme}
+          pieceStyle={preferences.pieceStyle}
           lastMove={lastMove}
           boardSize={boardSize}
         />
