@@ -53,7 +53,7 @@ export default function EndgameTrainer({ engine }) {
   useEffect(() => {
     if (endgame) {
       engineSetSkillLevel(5);
-      engineSetMultiPV(3);
+      engineSetMultiPV(1);
     }
   }, [endgame, engineSetSkillLevel, engineSetMultiPV]);
 
@@ -71,7 +71,7 @@ export default function EndgameTrainer({ engine }) {
     setIsThinking(false);
     engineNewGame();
     engineSetSkillLevel(5);
-    engineSetMultiPV(3);
+    engineSetMultiPV(1);
 
     setTimeout(() => {
       engineAnalyze(eg.fen, eg.engineDepth);
@@ -125,6 +125,7 @@ export default function EndgameTrainer({ engine }) {
     }
     if (!move) return false;
 
+    engineSetMultiPV(1);
     playMoveSound(game, move);
     setHistory((prev) => [...prev, { san: move.san, classification: null }]);
     setMoveCount((prev) => prev + 1);
@@ -153,7 +154,7 @@ export default function EndgameTrainer({ engine }) {
 
     makeEngineMove();
     return true;
-  }, [isThinking, success, endgame, makeEngineMove]);
+  }, [isThinking, success, endgame, makeEngineMove, engineSetMultiPV]);
 
   const handleUndo = useCallback(() => {
     if (isThinking || history.length < 2) return;
@@ -184,13 +185,20 @@ export default function EndgameTrainer({ engine }) {
     if (success) return;
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
-    const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
-    setHintData(hint);
-    if (hint) {
-      setArrows(hint.arrows || []);
-      setSquareStyles(hint.squareStyles || {});
-    }
-  }, [hintLevel, success]);
+
+    // Switch to MultiPV=3 for richer hints
+    engineSetMultiPV(3);
+    engineAnalyze(gameRef.current.fen(), endgame?.engineDepth || 6);
+
+    setTimeout(() => {
+      const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
+      setHintData(hint);
+      if (hint) {
+        setArrows(hint.arrows || []);
+        setSquareStyles(hint.squareStyles || {});
+      }
+    }, 500);
+  }, [hintLevel, success, engineSetMultiPV, engineAnalyze, endgame]);
 
   // Keyboard shortcut: H for hints
   useEffect(() => {

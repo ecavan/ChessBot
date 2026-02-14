@@ -4,16 +4,22 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+  },
   plugins: [
     react(),
     viteStaticCopy({
       targets: [
         {
-          src: 'node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.js',
+          src: 'node_modules/stockfish/src/stockfish-17.1-lite-51f59da.js',
           dest: 'stockfish'
         },
         {
-          src: 'node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.wasm',
+          src: 'node_modules/stockfish/src/stockfish-17.1-lite-51f59da.wasm',
           dest: 'stockfish'
         }
       ]
@@ -22,8 +28,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: [
         'icon.svg',
-        'stockfish/stockfish-17.1-lite-single-03e3232.js',
-        'stockfish/stockfish-17.1-lite-single-03e3232.wasm',
+        'stockfish/stockfish-17.1-lite-51f59da.js',
+        'stockfish/stockfish-17.1-lite-51f59da.wasm',
       ],
       manifest: {
         name: 'Chess Intuition Trainer',

@@ -6,19 +6,33 @@ export function useStockfish() {
   const [evaluation, setEvaluation] = useState(null);
   const [bestMove, setBestMove] = useState(null);
   const [topLines, setTopLines] = useState([]);
+  const [engineError, setEngineError] = useState(null);
   const resolveRef = useRef(null);
   const latestEvalRef = useRef(null);
   const readyCallbackRef = useRef(null);
   const pendingAnalyzeRef = useRef(false);
+  const currentMultiPVRef = useRef(1);
 
   useEffect(() => {
-    const worker = new Worker('/stockfish/stockfish-17.1-lite-single-03e3232.js');
+    if (typeof SharedArrayBuffer === 'undefined') {
+      setEngineError('SharedArrayBuffer not available. Cross-origin isolation headers may be missing.');
+      console.error('SharedArrayBuffer not available — cannot load multi-threaded Stockfish.');
+      return;
+    }
+
+    const worker = new Worker('/stockfish/stockfish-17.1-lite-51f59da.js');
     workerRef.current = worker;
 
     worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : String(e.data);
 
       if (line === 'uciok') {
+        // Configure threads based on hardware (half of available cores, min 2, max 4)
+        const threads = Math.min(
+          Math.max(2, Math.floor((navigator.hardwareConcurrency || 2) / 2)),
+          4
+        );
+        worker.postMessage(`setoption name Threads value ${threads}`);
         setIsReady(true);
       }
 
@@ -82,7 +96,7 @@ export function useStockfish() {
     return () => worker.terminate();
   }, []);
 
-  const analyze = useCallback((fen, depth = 12) => {
+  const analyze = useCallback((fen, depth = 20) => {
     const w = workerRef.current;
     if (!w) return;
     // Cancel any pending getBestMove — stale bestmove from stop would resolve it incorrectly
@@ -90,16 +104,20 @@ export function useStockfish() {
       resolveRef.current(null);
       resolveRef.current = null;
     }
-    readyCallbackRef.current = null;
-    pendingAnalyzeRef.current = true;
+    pendingAnalyzeRef.current = false;
     setTopLines([]);
     setBestMove(null);
     w.postMessage('stop');
-    w.postMessage(`position fen ${fen}`);
-    w.postMessage(`go depth ${depth}`);
+    // Use isready fence: stale bestmove from stop is consumed before new search begins
+    readyCallbackRef.current = () => {
+      pendingAnalyzeRef.current = true;
+      w.postMessage(`position fen ${fen}`);
+      w.postMessage(`go depth ${depth}`);
+    };
+    w.postMessage('isready');
   }, []);
 
-  const getBestMove = useCallback((fen, depth = 12) => {
+  const getBestMove = useCallback((fen, depth = 20) => {
     return new Promise((resolve) => {
       const w = workerRef.current;
       if (!w) { resolve(null); return; }
@@ -133,6 +151,8 @@ export function useStockfish() {
   }, []);
 
   const setMultiPV = useCallback((n) => {
+    if (currentMultiPVRef.current === n) return;
+    currentMultiPVRef.current = n;
     workerRef.current?.postMessage(`setoption name MultiPV value ${n}`);
   }, []);
 
@@ -159,7 +179,7 @@ export function useStockfish() {
   }, []);
 
   return {
-    isReady, evaluation, bestMove, topLines,
+    isReady, evaluation, bestMove, topLines, engineError,
     analyze, getBestMove, setSkillLevel, setMultiPV, newGame, stop,
   };
 }

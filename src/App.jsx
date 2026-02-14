@@ -5,6 +5,7 @@ import OpeningSandbox from './modes/OpeningSandbox';
 import ReviewMode from './modes/ReviewMode';
 import EndgameTrainer from './modes/EndgameTrainer';
 import PuzzlesTrainer from './modes/PuzzlesTrainer';
+import WatchMode from './modes/WatchMode';
 
 const MODES = [
   { key: 'play', label: 'Play' },
@@ -12,6 +13,7 @@ const MODES = [
   { key: 'endgames', label: 'Endgames' },
   { key: 'puzzles', label: 'Puzzles' },
   { key: 'review', label: 'Review' },
+  { key: 'watch', label: 'Watch' },
 ];
 
 export default function App() {
@@ -33,6 +35,20 @@ export default function App() {
     setLastGamePgn(pgn);
     setActiveMode('review');
   }, []);
+
+  if (engine.engineError) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-red-400 text-lg font-bold mb-2">Engine Failed to Load</p>
+          <p className="text-gray-400 text-sm">{engine.engineError}</p>
+          <p className="text-gray-500 text-xs mt-3">
+            Your browser may not support cross-origin isolation. Try Chrome, Safari 15.2+, or Firefox.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!engine.isReady) {
     return (
@@ -79,6 +95,9 @@ export default function App() {
         )}
         {activeMode === 'review' && (
           <ReviewMode engine={engine} initialPgn={lastGamePgn} />
+        )}
+        {activeMode === 'watch' && (
+          <WatchMode engine={engine} />
         )}
       </main>
     </div>

@@ -12,6 +12,7 @@ import { getThreats, getPlayerThreats } from '../utils/arrows';
 import { OPENINGS } from '../data/openings';
 import { playMoveSound } from '../utils/sounds';
 import { estimateElo, computeACPL } from '../utils/elo';
+import { getEloDisplay } from '../utils/eloDisplay';
 
 function uciToSan(uci, fen) {
   try {
@@ -61,7 +62,23 @@ function isBookMove(uciHistory) {
   });
 }
 
-const ANALYSIS_DEPTH = 16;
+// Find all opening continuations matching the current UCI sequence and pick one randomly
+function getRandomBookMove(uciHistory) {
+  const candidates = [];
+  for (const opening of openingValues) {
+    if (uciHistory.length < opening.moves.length) {
+      if (uciHistory.every((m, i) => m === opening.moves[i])) {
+        candidates.push(opening.moves[uciHistory.length]);
+      }
+    }
+  }
+  if (candidates.length === 0) return null;
+  const unique = [...new Set(candidates)];
+  return unique[Math.floor(Math.random() * unique.length)];
+}
+
+const ANALYSIS_DEPTH = 20;
+const HINT_DEPTH = 16;
 
 const DIFFICULTIES = [
   { label: 'Beginner', skill: 0, depth: 5 },
@@ -115,6 +132,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   const [brilliantFlash, setBrilliantFlash] = useState(false);
   const [moveIndicator, setMoveIndicator] = useState(null);
   const [indicatorKey, setIndicatorKey] = useState(0);
+  const [runningAccuracy, setRunningAccuracy] = useState(null);
   const evalBeforeRef = useRef(null);
   const isThinkingRef = useRef(false);
   const settingsRef = useRef(settings);
@@ -131,9 +149,9 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     engineSetSkillLevel(settings.skillLevel);
   }, [engineSetSkillLevel, settings.skillLevel]);
 
-  // Enable MultiPV for hints
+  // Default MultiPV=1 for faster analysis; toggle to 3 only when hints requested
   useEffect(() => {
-    engineSetMultiPV(3);
+    engineSetMultiPV(1);
   }, [engineSetMultiPV]);
 
   // Run initial analysis for the starting position
@@ -188,23 +206,34 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     }
 
     try {
-      const depth = settingsRef.current.engineDepth;
-      const result = await engineGetBestMove(game.fen(), depth);
-      if (!result || !result.move || result.move === '(none)') {
-        isThinkingRef.current = false;
-        setIsThinking(false);
-        return;
+      // Try a random book move during the opening phase (~first 10 moves)
+      const bookMove = uciHistoryRef.current.length < 10
+        ? getRandomBookMove(uciHistoryRef.current)
+        : null;
+
+      let uciMove;
+      if (bookMove) {
+        uciMove = bookMove;
+      } else {
+        const depth = settingsRef.current.engineDepth;
+        const result = await engineGetBestMove(game.fen(), depth);
+        if (!result || !result.move || result.move === '(none)') {
+          isThinkingRef.current = false;
+          setIsThinking(false);
+          return;
+        }
+        uciMove = result.move;
       }
 
-      const from = result.move.slice(0, 2);
-      const to = result.move.slice(2, 4);
-      const promotion = result.move.length > 4 ? result.move[4] : undefined;
+      const from = uciMove.slice(0, 2);
+      const to = uciMove.slice(2, 4);
+      const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
 
       const move = game.move({ from, to, promotion });
       if (move) {
         playMoveSound(game, move);
         // Track engine UCI move for book detection
-        uciHistoryRef.current = [...uciHistoryRef.current, result.move];
+        uciHistoryRef.current = [...uciHistoryRef.current, uciMove];
 
         setHistory((prev) => [...prev, {
           san: move.san,
@@ -258,6 +287,9 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     // Track UCI for book detection
     uciHistoryRef.current = [...uciHistoryRef.current, uci];
 
+    // Reset MultiPV to 1 for faster analysis after hints
+    engineSetMultiPV(1);
+
     // Commit the move to state immediately
     setHistory((prev) => [...prev, { san: move.san, fen: game.fen(), classification: null }]);
     setCurrentMoveIndex((prev) => prev + 1);
@@ -300,8 +332,10 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
           piece: move.piece,
           captured: move.captured,
           to: move.to,
+          from: move.from,
           color: move.color,
           gameAfter: gameRef.current,
+          gameBefore: new Chess(fenBeforeMove),
           playerUci: uci,
           bestUci: preMoveBestUci,
         });
@@ -316,6 +350,16 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
               break;
             }
           }
+
+          // Compute running accuracy from player's classified moves
+          const playerIsWhite = boardOrientation === 'white';
+          const playerMoves = updated.filter((_, idx) => playerIsWhite ? idx % 2 === 0 : idx % 2 === 1);
+          const withEval = playerMoves.filter((m) => m.evalBefore != null && m.evalAfter != null);
+          if (withEval.length >= 3) {
+            const acpl = computeACPL(withEval);
+            setRunningAccuracy(Math.round(Math.max(0, Math.min(100, 100 - acpl / 2))));
+          }
+
           return updated;
         });
 
@@ -415,10 +459,11 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     uciHistoryRef.current = [];
     setMoveIndicator(null);
     setBrilliantFlash(false);
+    setRunningAccuracy(null);
 
     engineNewGame();
     engineSetSkillLevel(s.skillLevel);
-    engineSetMultiPV(3);
+    engineSetMultiPV(1);
 
     setTimeout(() => {
       engineAnalyze(gameRef.current.fen(), ANALYSIS_DEPTH);
@@ -449,13 +494,21 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   const handleRequestHint = useCallback(() => {
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
-    const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
-    setHintData(hint);
-    if (hint) {
-      setArrows(hint.arrows || []);
-      setSquareStyles(hint.squareStyles || {});
-    }
-  }, [hintLevel]);
+
+    // Switch to MultiPV=3 for richer hint data, then re-analyze
+    engineSetMultiPV(3);
+    engineAnalyze(gameRef.current.fen(), HINT_DEPTH);
+
+    // Brief delay to let engine produce MultiPV lines
+    setTimeout(() => {
+      const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
+      setHintData(hint);
+      if (hint) {
+        setArrows(hint.arrows || []);
+        setSquareStyles(hint.squareStyles || {});
+      }
+    }, 500);
+  }, [hintLevel, engineSetMultiPV, engineAnalyze]);
 
   const handleSettingsChange = useCallback((newSettings) => {
     setSettings(newSettings);
@@ -572,7 +625,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
         ))}
       </div>
 
-      {/* Status + move indicator */}
+      {/* Status + move indicator + running accuracy */}
       <div className="flex items-center gap-3">
         <div className="text-sm text-gray-400">
           {gameOver ? (
@@ -597,6 +650,12 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
             }}
           >
             {moveIndicator.symbol ? `${moveIndicator.symbol} ` : ''}{moveIndicator.label}
+          </div>
+        )}
+
+        {runningAccuracy !== null && !gameOver && (
+          <div className="text-xs text-gray-400">
+            Accuracy: <span className="font-bold text-gray-200">{runningAccuracy}%</span>
           </div>
         )}
       </div>
@@ -658,65 +717,83 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
         </div>
       </div>
 
-      {gameOver && summaryCounts && (
-        <div className="bg-gray-800 rounded-lg p-4 max-w-md text-center">
-          <h3 className="text-lg font-bold mb-2">{gameOver}</h3>
+      {gameOver && summaryCounts && (() => {
+        const elo = summaryCounts.eloData;
+        const eloStyle = elo ? getEloDisplay(elo.elo) : null;
+        return (
+          <div className="bg-gray-800 rounded-lg p-5 max-w-md text-center">
+            <h3 className="text-lg font-bold mb-3">{gameOver}</h3>
 
-          {/* ELO estimate */}
-          {summaryCounts.eloData && (
-            <div className="mb-3 pb-3 border-b border-gray-700">
-              <div className="text-3xl font-black text-white">{summaryCounts.eloData.elo}</div>
-              <div className="text-xs text-gray-400 mt-0.5">Estimated Rating</div>
-              <div className="flex justify-center gap-4 mt-1.5 text-xs text-gray-500">
-                <span>Accuracy: {summaryCounts.eloData.accuracy}%</span>
-                <span>ACPL: {summaryCounts.eloData.acpl}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
-            {summaryCounts.brilliant > 0 && (
-              <span style={{ color: '#26c6da' }}>{summaryCounts.brilliant} brilliant</span>
-            )}
-            {summaryCounts.best > 0 && (
-              <span style={{ color: '#96bc4b' }}>{summaryCounts.best} best</span>
-            )}
-            {summaryCounts.great > 0 && (
-              <span style={{ color: '#5dadec' }}>{summaryCounts.great} great</span>
-            )}
-          </div>
-          <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
-            <span className="text-red-400">{summaryCounts.blunders} blunders</span>
-            <span className="text-orange-400">{summaryCounts.mistakes} mistakes</span>
-            {summaryCounts.misses > 0 && (
-              <span className="text-orange-400">{summaryCounts.misses} misses</span>
-            )}
-            <span style={{ color: '#f7c631' }}>{summaryCounts.inaccuracies} inaccuracies</span>
-          </div>
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={handleNewGame}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-medium transition-colors text-sm"
-            >
-              Play Again
-            </button>
-            <button
-              onClick={() => navigator.clipboard.writeText(gameRef.current.pgn())}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium transition-colors text-sm"
-            >
-              Copy PGN
-            </button>
-            {onReviewGame && (
-              <button
-                onClick={() => onReviewGame(gameRef.current.pgn())}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-sm"
+            {/* ELO estimate — prominent card */}
+            {elo && eloStyle && (
+              <div
+                className="rounded-lg p-4 mb-4"
+                style={{
+                  background: `linear-gradient(135deg, ${eloStyle.color}18, ${eloStyle.color}08)`,
+                  border: `1px solid ${eloStyle.color}30`,
+                }}
               >
-                Review Game
-              </button>
+                <div className="text-4xl font-black" style={{ color: eloStyle.color }}>
+                  {elo.elo}
+                </div>
+                <div className="text-sm font-medium mt-1" style={{ color: eloStyle.color }}>
+                  {eloStyle.label}
+                </div>
+                <div className="flex justify-center gap-4 mt-2 text-sm">
+                  <span className="text-gray-300">
+                    Accuracy: <strong>{elo.accuracy}%</strong>
+                  </span>
+                  <span className="text-gray-400">
+                    ACPL: {elo.acpl}
+                  </span>
+                </div>
+              </div>
             )}
+
+            <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
+              {summaryCounts.brilliant > 0 && (
+                <span style={{ color: '#26c6da' }}>{summaryCounts.brilliant} brilliant</span>
+              )}
+              {summaryCounts.best > 0 && (
+                <span style={{ color: '#96bc4b' }}>{summaryCounts.best} best</span>
+              )}
+              {summaryCounts.great > 0 && (
+                <span style={{ color: '#5dadec' }}>{summaryCounts.great} great</span>
+              )}
+            </div>
+            <div className="flex gap-3 justify-center text-sm mb-3 flex-wrap">
+              <span className="text-red-400">{summaryCounts.blunders} blunders</span>
+              <span className="text-orange-400">{summaryCounts.mistakes} mistakes</span>
+              {summaryCounts.misses > 0 && (
+                <span className="text-orange-400">{summaryCounts.misses} misses</span>
+              )}
+              <span style={{ color: '#f7c631' }}>{summaryCounts.inaccuracies} inaccuracies</span>
+            </div>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={handleNewGame}
+                className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-medium transition-colors text-sm"
+              >
+                Play Again
+              </button>
+              <button
+                onClick={() => navigator.clipboard.writeText(gameRef.current.pgn())}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium transition-colors text-sm"
+              >
+                Copy PGN
+              </button>
+              {onReviewGame && (
+                <button
+                  onClick={() => onReviewGame(gameRef.current.pgn())}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-sm"
+                >
+                  Review Game
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <BlunderAlert
         visible={!!blunderAlert}

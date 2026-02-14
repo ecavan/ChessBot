@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { getEloDisplay } from '../utils/eloDisplay';
 
 export default function ReviewPanel({ analysis, currentIndex, onNavigate, summary }) {
   const listRef = useRef(null);
@@ -28,20 +29,38 @@ export default function ReviewPanel({ analysis, currentIndex, onNavigate, summar
     <div className="bg-gray-800 rounded p-3">
       {summary && (
         <div className="mb-3 pb-2 border-b border-gray-700">
-          {/* ELO estimates */}
-          {summary.whiteElo && summary.blackElo && (
-            <div className="flex justify-between mb-2 pb-2 border-b border-gray-700">
-              <div className="text-center flex-1">
-                <div className="text-lg font-bold text-white">{summary.whiteElo.elo}</div>
-                <div className="text-[10px] text-gray-400">White · {summary.whiteElo.accuracy}%</div>
+          {/* ELO estimates — prominent display */}
+          {summary.whiteElo && summary.blackElo && (() => {
+            const whiteStyle = getEloDisplay(summary.whiteElo.elo);
+            const blackStyle = getEloDisplay(summary.blackElo.elo);
+            return (
+              <div className="flex justify-between mb-3 pb-3 border-b border-gray-700">
+                <div className="text-center flex-1">
+                  <div className="text-2xl font-black" style={{ color: whiteStyle.color }}>
+                    {summary.whiteElo.elo}
+                  </div>
+                  <div className="text-[10px] font-medium" style={{ color: whiteStyle.color }}>
+                    {whiteStyle.label}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    White · {summary.whiteElo.accuracy}% · ACPL {summary.whiteElo.acpl}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-600 self-center px-2">vs</div>
+                <div className="text-center flex-1">
+                  <div className="text-2xl font-black" style={{ color: blackStyle.color }}>
+                    {summary.blackElo.elo}
+                  </div>
+                  <div className="text-[10px] font-medium" style={{ color: blackStyle.color }}>
+                    {blackStyle.label}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    Black · {summary.blackElo.accuracy}% · ACPL {summary.blackElo.acpl}
+                  </div>
+                </div>
               </div>
-              <div className="text-[10px] text-gray-600 self-center">EST. RATING</div>
-              <div className="text-center flex-1">
-                <div className="text-lg font-bold text-white">{summary.blackElo.elo}</div>
-                <div className="text-[10px] text-gray-400">Black · {summary.blackElo.accuracy}%</div>
-              </div>
-            </div>
-          )}
+            );
+          })()}
           <div className="flex gap-3 text-xs flex-wrap">
             {summary.brilliancies > 0 && (
               <span style={{ color: '#26c6da' }}>{summary.brilliancies} brilliant</span>

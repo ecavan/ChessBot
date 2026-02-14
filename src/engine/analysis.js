@@ -1,22 +1,36 @@
 const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 
 function isSacrifice(moveInfo) {
-  const { piece, captured, to, color, gameAfter } = moveInfo;
+  const { piece, captured, to, color, gameAfter, from, gameBefore } = moveInfo;
   const movingValue = PIECE_VALUES[piece] || 0;
   const capturedValue = captured ? (PIECE_VALUES[captured] || 0) : 0;
-
   const opponentColor = color === 'w' ? 'b' : 'w';
+
+  // Check if the piece is attacked on its destination square
   let isHanging;
   try {
     isHanging = gameAfter.isAttacked(to, opponentColor);
   } catch {
     return false;
   }
-
   if (!isHanging) return false;
 
+  // Require a full piece sacrifice (net material >= 3, not just an exchange)
   const netSacrifice = movingValue - capturedValue;
-  return netSacrifice >= 2;
+  if (netSacrifice < 3) return false;
+
+  // If the piece was already en prise before the move, moving it isn't a sacrifice
+  if (gameBefore && from) {
+    try {
+      if (gameBefore.isAttacked(from, opponentColor)) {
+        return false;
+      }
+    } catch {
+      // If check fails, allow it
+    }
+  }
+
+  return true;
 }
 
 export function classifyMove(evalBefore, evalAfter, isWhite, moveInfo) {
@@ -27,9 +41,13 @@ export function classifyMove(evalBefore, evalAfter, isWhite, moveInfo) {
 
   // --- Positive classifications (best to good) ---
 
-  // Brilliant: sacrifice + good move
-  if (moveInfo && loss <= 0.3 && isSacrifice(moveInfo)) {
-    return { type: 'brilliant', symbol: '!!', color: '#26c6da', label: 'Brilliant' };
+  // Brilliant: sacrifice + must be the best move or very close to it
+  if (moveInfo && isSacrifice(moveInfo)) {
+    const isBestOrNearBest = (moveInfo.playerUci && moveInfo.bestUci &&
+      moveInfo.playerUci === moveInfo.bestUci) || loss <= 0.1;
+    if (isBestOrNearBest && loss <= 0.15) {
+      return { type: 'brilliant', symbol: '!!', color: '#26c6da', label: 'Brilliant' };
+    }
   }
 
   // Great: significantly improved position beyond engine expectation
@@ -45,12 +63,12 @@ export function classifyMove(evalBefore, evalAfter, isWhite, moveInfo) {
   }
 
   // Good: close to best
-  if (loss <= 0.1) {
+  if (loss <= 0.15) {
     return { type: 'good', symbol: '', color: '#96bc4b', label: 'Good' };
   }
 
   // Okay: acceptable
-  if (loss <= 0.4) {
+  if (loss <= 0.5) {
     return { type: 'okay', symbol: '', color: '#8b8b8b', label: 'Okay' };
   }
 

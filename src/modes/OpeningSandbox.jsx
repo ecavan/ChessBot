@@ -84,9 +84,9 @@ export default function OpeningSandbox({ engine }) {
     engineAnalyze(gameRef.current.fen(), 16);
   }, [engineGetBestMove, engineAnalyze]);
 
-  // Enable MultiPV for hints in free play
+  // Default MultiPV=1; toggle to 3 only when hints requested
   useEffect(() => {
-    engineSetMultiPV(3);
+    engineSetMultiPV(1);
   }, [engineSetMultiPV]);
 
   const startFreePlay = useCallback((isEngineTurnNext) => {
@@ -200,6 +200,7 @@ export default function OpeningSandbox({ engine }) {
       }
     } else {
       // Free play phase
+      engineSetMultiPV(1);
       playMoveSound(game, move);
       setHistory((prev) => [...prev, { san: move.san, classification: null }]);
       setFen(game.fen());
@@ -214,7 +215,7 @@ export default function OpeningSandbox({ engine }) {
       }
       return true;
     }
-  }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove, startFreePlay]);
+  }, [opening, isOpeningPhase, moveIndex, moveHistory, makeEngineFreeMove, startFreePlay, engineSetMultiPV]);
 
   const handleUndo = useCallback(() => {
     if (isOpeningPhase || isThinking) return;
@@ -246,13 +247,20 @@ export default function OpeningSandbox({ engine }) {
     if (isOpeningPhase) return;
     const newLevel = Math.min(hintLevel + 1, 3);
     setHintLevel(newLevel);
-    const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
-    setHintData(hint);
-    if (hint) {
-      setArrows(hint.arrows || []);
-      setSquareStyles(hint.squareStyles || {});
-    }
-  }, [hintLevel, isOpeningPhase]);
+
+    // Switch to MultiPV=3 for richer hints
+    engineSetMultiPV(3);
+    engineAnalyze(gameRef.current.fen(), 16);
+
+    setTimeout(() => {
+      const hint = generateHint(engineTopLinesRef.current, gameRef.current, newLevel);
+      setHintData(hint);
+      if (hint) {
+        setArrows(hint.arrows || []);
+        setSquareStyles(hint.squareStyles || {});
+      }
+    }, 500);
+  }, [hintLevel, isOpeningPhase, engineSetMultiPV, engineAnalyze]);
 
   const handleReset = useCallback(() => {
     gameRef.current = new Chess();
