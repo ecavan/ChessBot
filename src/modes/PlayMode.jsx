@@ -8,7 +8,7 @@ import BlunderAlert from '../components/BlunderAlert';
 import GameControls from '../components/GameControls';
 import { classifyMove } from '../engine/analysis';
 import { generateHint } from '../engine/hints';
-import { getThreats, getPlayerThreats } from '../utils/arrows';
+import { getThreats, getPlayerThreats, getProtectionArrows, getForkArrows } from '../utils/arrows';
 import { OPENINGS } from '../data/openings';
 import { playMoveSound } from '../utils/sounds';
 import { estimateElo, computeACPL } from '../utils/elo';
@@ -116,6 +116,8 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     blunderWarnings: true,
     showThreats: true,
     showPlayerThreats: false,
+    showProtection: false,
+    showForks: false,
     showEval: true,
     hintsAvailable: true,
     playerColor: 'white',
@@ -488,7 +490,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setSquareStyles({});
     setHintLevel(0);
     setHintData(null);
-    setSettings((prev) => ({ ...prev, showThreats: false, showPlayerThreats: false }));
+    setSettings((prev) => ({ ...prev, showThreats: false, showPlayerThreats: false, showProtection: false, showForks: false }));
   }, []);
 
   const handleRequestHint = useCallback(() => {
@@ -561,13 +563,19 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   const isPlayerTurn = (gameRef.current.turn() === 'w' && boardOrientation === 'white') ||
                        (gameRef.current.turn() === 'b' && boardOrientation === 'black');
 
-  // Compute threat arrows (deduplicate by from+to, prefer player threats over opponent threats)
+  // Compute threat arrows (deduplicate by from+to, higher priority overwrites lower)
   const threatArrows = settings.showThreats ? getThreats(gameRef.current) : [];
   const playerThreatArrows = settings.showPlayerThreats && isPlayerTurn
     ? getPlayerThreats(gameRef.current) : [];
+  const forkArrows = settings.showForks && isPlayerTurn
+    ? getForkArrows(gameRef.current) : [];
+  const protectionArrows = settings.showProtection && isPlayerTurn
+    ? getProtectionArrows(gameRef.current) : [];
   const arrowMap = new Map();
   for (const a of threatArrows) arrowMap.set(a[0] + a[1], a);
-  for (const a of playerThreatArrows) arrowMap.set(a[0] + a[1], a); // overwrites red with orange
+  for (const a of playerThreatArrows) arrowMap.set(a[0] + a[1], a);
+  for (const a of forkArrows) arrowMap.set(a[0] + a[1], a);
+  for (const a of protectionArrows) arrowMap.set(a[0] + a[1], a);
   const allArrows = [...arrows, ...arrowMap.values()];
 
   const currentDifficulty = DIFFICULTIES.find(

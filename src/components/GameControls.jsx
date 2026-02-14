@@ -110,6 +110,38 @@ export default function GameControls({ onNewGame, onUndo, onFlipBoard, onClearBo
           </div>
 
           <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-400">Defenders</span>
+            <button
+              onClick={() => onSettingsChange({ ...settings, showProtection: !settings.showProtection })}
+              className={`w-10 h-5 rounded-full transition-colors ${
+                settings.showProtection ? 'bg-green-600' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 bg-white rounded-full transition-transform mx-0.5 ${
+                  settings.showProtection ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-400">Forks</span>
+            <button
+              onClick={() => onSettingsChange({ ...settings, showForks: !settings.showForks })}
+              className={`w-10 h-5 rounded-full transition-colors ${
+                settings.showForks ? 'bg-purple-600' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 bg-white rounded-full transition-transform mx-0.5 ${
+                  settings.showForks ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400">Show Eval Bar</span>
             <button
               onClick={() => onSettingsChange({ ...settings, showEval: !settings.showEval })}

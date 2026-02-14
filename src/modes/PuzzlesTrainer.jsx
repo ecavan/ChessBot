@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../components/Board';
 import { PUZZLES, DIFFICULTY_ORDER } from '../data/puzzles';
-import { getThreats, getPlayerThreats } from '../utils/arrows';
+import { getThreats, getPlayerThreats, getProtectionArrows, getForkArrows } from '../utils/arrows';
 import { playMoveSound, sounds } from '../utils/sounds';
 
 const DIFFICULTY_STYLES = {
@@ -60,6 +60,8 @@ export default function PuzzlesTrainer() {
   const [hintLevel, setHintLevel] = useState(0);
   const [showThreats, setShowThreats] = useState(false);
   const [showPlayerThreats, setShowPlayerThreats] = useState(false);
+  const [showProtection, setShowProtection] = useState(false);
+  const [showForks, setShowForks] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const loadPuzzle = useCallback((puzzle) => {
@@ -280,16 +282,22 @@ export default function PuzzlesTrainer() {
     );
   }
 
-  // Compute threat arrows
+  // Compute threat arrows (deduplicate by from+to, higher priority overwrites lower)
   const boardColor = activePuzzle.playerColor;
   const isPlayerTurn = (boardColor === 'white' && gameRef.current.turn() === 'w') ||
                        (boardColor === 'black' && gameRef.current.turn() === 'b');
   const threatArrows = showThreats ? getThreats(gameRef.current) : [];
   const playerThreatArrows = showPlayerThreats && isPlayerTurn
     ? getPlayerThreats(gameRef.current) : [];
+  const forkArrows = showForks && isPlayerTurn
+    ? getForkArrows(gameRef.current) : [];
+  const protectionArrows = showProtection && isPlayerTurn
+    ? getProtectionArrows(gameRef.current) : [];
   const arrowMap = new Map();
   for (const a of threatArrows) arrowMap.set(a[0] + a[1], a);
   for (const a of playerThreatArrows) arrowMap.set(a[0] + a[1], a);
+  for (const a of forkArrows) arrowMap.set(a[0] + a[1], a);
+  for (const a of protectionArrows) arrowMap.set(a[0] + a[1], a);
   const allArrows = [...arrows, ...arrowMap.values()];
 
   const totalPlayerMoves = activePuzzle.solution.filter((_, i) => i % 2 === 0).length;
@@ -390,23 +398,43 @@ export default function PuzzlesTrainer() {
           )}
 
           {/* Arrow toggles */}
-          <div className="flex gap-2 text-xs">
-            <button
-              onClick={() => setShowThreats(!showThreats)}
-              className={`flex-1 px-2 py-1.5 rounded transition-colors ${
-                showThreats ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              Threats
-            </button>
-            <button
-              onClick={() => setShowPlayerThreats(!showPlayerThreats)}
-              className={`flex-1 px-2 py-1.5 rounded transition-colors ${
-                showPlayerThreats ? 'bg-orange-900 text-orange-300' : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              My Attacks
-            </button>
+          <div className="space-y-1.5">
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => setShowThreats(!showThreats)}
+                className={`flex-1 px-2 py-1.5 rounded transition-colors ${
+                  showThreats ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Threats
+              </button>
+              <button
+                onClick={() => setShowPlayerThreats(!showPlayerThreats)}
+                className={`flex-1 px-2 py-1.5 rounded transition-colors ${
+                  showPlayerThreats ? 'bg-orange-900 text-orange-300' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Attacks
+              </button>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => setShowProtection(!showProtection)}
+                className={`flex-1 px-2 py-1.5 rounded transition-colors ${
+                  showProtection ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Defenders
+              </button>
+              <button
+                onClick={() => setShowForks(!showForks)}
+                className={`flex-1 px-2 py-1.5 rounded transition-colors ${
+                  showForks ? 'bg-purple-900 text-purple-300' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Forks
+              </button>
+            </div>
           </div>
 
           {/* Controls */}
