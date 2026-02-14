@@ -1,94 +1,187 @@
-// Neo piece set — modern, geometric, clean shapes with rounded forms
-const W = '#ffffff';
-const B = '#1a1a2e';
-const S = '#000000';
-const SL = '#ffffff';
-
-function svg(children, props) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
-      {children}
-    </svg>
-  );
-}
+// Neo piece set — modern, sleek, clean shapes with smooth curves
+// Inspired by contemporary chess apps. Clear silhouettes, weighted bases.
 
 export const neoPieces = {
-  wK: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M22.5 5v6M19.5 8h6" strokeWidth="2"/>
-      <path d="M22.5 13c-4 0-7 3-10 6-3 3-4 7-4 10 0 3 2 6 5 8h18c3-2 5-5 5-8 0-3-1-7-4-10-3-3-6-6-10-6z"/>
-      <path d="M12.5 37c0-4 4-6 10-6s10 2 10 6" fill="none"/>
-    </g>, props),
-  bK: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M22.5 5v6M19.5 8h6" strokeWidth="2"/>
-      <path d="M22.5 13c-4 0-7 3-10 6-3 3-4 7-4 10 0 3 2 6 5 8h18c3-2 5-5 5-8 0-3-1-7-4-10-3-3-6-6-10-6z"/>
-      <path d="M12.5 37c0-4 4-6 10-6s10 2 10 6" fill="none"/>
-    </g>, props),
-  wQ: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <circle cx="22.5" cy="7" r="3"/>
-      <path d="M9 37h27L33 17l-5 8-5.5-10L17 25l-5-8z"/>
-      <path d="M9 37c0-2 4-4 13.5-4S36 35 36 37" fill="none"/>
-      <circle cx="9" cy="17" r="2"/><circle cx="36" cy="17" r="2"/>
-      <circle cx="17" cy="10" r="2"/><circle cx="28" cy="10" r="2"/>
-    </g>, props),
-  bQ: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <circle cx="22.5" cy="7" r="3"/>
-      <path d="M9 37h27L33 17l-5 8-5.5-10L17 25l-5-8z"/>
-      <path d="M9 37c0-2 4-4 13.5-4S36 35 36 37" fill="none"/>
-      <circle cx="9" cy="17" r="2"/><circle cx="36" cy="17" r="2"/>
-      <circle cx="17" cy="10" r="2"/><circle cx="28" cy="10" r="2"/>
-    </g>, props),
-  wR: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 39h25v-4H10zM11 35v-5h23v5M13 30V16h3v3h4v-3h5v3h4v-3h3v14"/>
-      <path d="M13 16h19v-3H13z"/>
-    </g>, props),
-  bR: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 39h25v-4H10zM11 35v-5h23v5M13 30V16h3v3h4v-3h5v3h4v-3h3v14"/>
-      <path d="M13 16h19v-3H13z"/>
-    </g>, props),
-  wB: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 38c0-2 5-4 12.5-4S35 36 35 38H10z"/>
-      <path d="M15 32c-1-3 0-7 3-11 2-3 5-5 5-9 0-1-.5-2-.5-2 3 0 5 2 5 5 0 4-3 6-5 9-3 4-4 8-3 11"/>
-      <circle cx="22.5" cy="8" r="3"/>
-      <path d="M15 32h15" fill="none"/>
-    </g>, props),
-  bB: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 38c0-2 5-4 12.5-4S35 36 35 38H10z"/>
-      <path d="M15 32c-1-3 0-7 3-11 2-3 5-5 5-9 0-1-.5-2-.5-2 3 0 5 2 5 5 0 4-3 6-5 9-3 4-4 8-3 11"/>
-      <circle cx="22.5" cy="8" r="3"/>
-      <path d="M15 32h15" fill="none"/>
-    </g>, props),
-  wN: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 38c0-2 4-4 12.5-4S35 36 35 38H10z"/>
-      <path d="M22 10c-2 0-3 3-3 3l-4 7c-1 2 0 4 2 4h3c0 4-2 8-4 10h16c-3-3-5-7-5-14 0-5-2-10-5-10z"/>
-      <circle cx="18" cy="16" r="1.5" fill={S}/>
-      <path d="M16 22c1-1 3-1 4 0" fill="none"/>
-    </g>, props),
-  bN: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <path d="M10 38c0-2 4-4 12.5-4S35 36 35 38H10z"/>
-      <path d="M22 10c-2 0-3 3-3 3l-4 7c-1 2 0 4 2 4h3c0 4-2 8-4 10h16c-3-3-5-7-5-14 0-5-2-10-5-10z"/>
-      <circle cx="18" cy="16" r="1.5" fill={SL}/>
-      <path d="M16 22c1-1 3-1 4 0" fill="none"/>
-    </g>, props),
-  wP: (props) => svg(
-    <g fill={props?.fill ?? W} stroke={S} strokeWidth="1.5" strokeLinejoin="round">
-      <circle cx="22.5" cy="13" r="5"/>
-      <path d="M14 38c0-3 4-5 8.5-5s8.5 2 8.5 5H14z"/>
-      <path d="M17.5 26c0-3 2-5 5-5s5 2 5 5c0 2-1.5 4-3 5h-4c-1.5-1-3-3-3-5z"/>
-    </g>, props),
-  bP: (props) => svg(
-    <g fill={props?.fill ?? B} stroke={SL} strokeWidth="1.5" strokeLinejoin="round">
-      <circle cx="22.5" cy="13" r="5"/>
-      <path d="M14 38c0-3 4-5 8.5-5s8.5 2 8.5 5H14z"/>
-      <path d="M17.5 26c0-3 2-5 5-5s5 2 5 5c0 2-1.5 4-3 5h-4c-1.5-1-3-3-3-5z"/>
-    </g>, props),
+  wK: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        {/* Cross */}
+        <path d="M 22.5,11.5 L 22.5,6" style={{ strokeWidth: '2' }} />
+        <path d="M 20,8.5 L 25,8.5" style={{ strokeWidth: '2' }} />
+        {/* Crown body — smooth dome */}
+        <path d="M 22.5,13 C 20,13 17.5,14.5 16,17 C 14,20 13,24 13,28 L 32,28 C 32,24 31,20 29,17 C 27.5,14.5 25,13 22.5,13 z" />
+        {/* Collar bands */}
+        <path d="M 13,28 C 13,30 14,31 15,31.5 L 30,31.5 C 31,31 32,30 32,28" style={{ fill: 'none' }} />
+        <path d="M 14.5,25 C 18,24 27,24 30.5,25" style={{ fill: 'none', strokeWidth: '1' }} />
+        {/* Base */}
+        <path d="M 11,37.5 C 11,35 14,33 22.5,33 C 31,33 34,35 34,37.5 L 34,39 L 11,39 L 11,37.5 z" />
+        <path d="M 11.5,37.5 C 11.5,35.5 15,34 22.5,34 C 30,34 33.5,35.5 33.5,37.5" style={{ fill: 'none', strokeWidth: '1' }} />
+      </g>
+    </svg>
+  ),
+  bK: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#000000', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <path d="M 22.5,11.5 L 22.5,6" style={{ strokeWidth: '2' }} />
+        <path d="M 20,8.5 L 25,8.5" style={{ strokeWidth: '2' }} />
+        <path d="M 22.5,13 C 20,13 17.5,14.5 16,17 C 14,20 13,24 13,28 L 32,28 C 32,24 31,20 29,17 C 27.5,14.5 25,13 22.5,13 z" />
+        <path d="M 13,28 C 13,30 14,31 15,31.5 L 30,31.5 C 31,31 32,30 32,28" style={{ fill: 'none', stroke: '#ffffff' }} />
+        <path d="M 14.5,25 C 18,24 27,24 30.5,25" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+        <path d="M 11,37.5 C 11,35 14,33 22.5,33 C 31,33 34,35 34,37.5 L 34,39 L 11,39 L 11,37.5 z" />
+        <path d="M 11.5,37.5 C 11.5,35.5 15,34 22.5,34 C 30,34 33.5,35.5 33.5,37.5" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+      </g>
+    </svg>
+  ),
+  wQ: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        {/* Orb */}
+        <circle cx="22.5" cy="7.5" r="3" />
+        {/* Crown points and body */}
+        <path d="M 9,26 C 17.5,24.5 27.5,24.5 36,26 L 38,14 L 31.5,24 L 30.5,11.5 L 25.5,23.5 L 22.5,10.5 L 19.5,23.5 L 14.5,11.5 L 13.5,24 L 7,14 L 9,26 z" />
+        {/* Point balls */}
+        <circle cx="7" cy="14" r="2" />
+        <circle cx="14.5" cy="11.5" r="2" />
+        <circle cx="22.5" cy="10.5" r="2" />
+        <circle cx="30.5" cy="11.5" r="2" />
+        <circle cx="38" cy="14" r="2" />
+        {/* Body curve */}
+        <path d="M 9,26 C 9,28 10.5,29 12,30.5 C 12.5,31 12,33 11.5,34 C 13,35.5 17,36.5 22.5,36.5 C 28,36.5 32,35.5 33.5,34 C 33,33 32.5,31 33,30.5 C 34.5,29 36,28 36,26" />
+        {/* Collar lines */}
+        <path d="M 11.5,30 C 15,29 30,29 33.5,30" style={{ fill: 'none' }} />
+        <path d="M 12,33.5 C 16,32.5 29,32.5 33,33.5" style={{ fill: 'none' }} />
+        {/* Base */}
+        <path d="M 10,39 L 35,39 C 35,37 30,36 22.5,36 C 15,36 10,37 10,39 z" />
+      </g>
+    </svg>
+  ),
+  bQ: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#000000', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <circle cx="22.5" cy="7.5" r="3" />
+        <path d="M 9,26 C 17.5,24.5 27.5,24.5 36,26 L 38,14 L 31.5,24 L 30.5,11.5 L 25.5,23.5 L 22.5,10.5 L 19.5,23.5 L 14.5,11.5 L 13.5,24 L 7,14 L 9,26 z" />
+        <circle cx="7" cy="14" r="2" />
+        <circle cx="14.5" cy="11.5" r="2" />
+        <circle cx="22.5" cy="10.5" r="2" />
+        <circle cx="30.5" cy="11.5" r="2" />
+        <circle cx="38" cy="14" r="2" />
+        <path d="M 9,26 C 9,28 10.5,29 12,30.5 C 12.5,31 12,33 11.5,34 C 13,35.5 17,36.5 22.5,36.5 C 28,36.5 32,35.5 33.5,34 C 33,33 32.5,31 33,30.5 C 34.5,29 36,28 36,26" />
+        <path d="M 11.5,30 C 15,29 30,29 33.5,30" style={{ fill: 'none', stroke: '#ffffff' }} />
+        <path d="M 12,33.5 C 16,32.5 29,32.5 33,33.5" style={{ fill: 'none', stroke: '#ffffff' }} />
+        <path d="M 10,39 L 35,39 C 35,37 30,36 22.5,36 C 15,36 10,37 10,39 z" />
+      </g>
+    </svg>
+  ),
+  wR: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        {/* Base platform */}
+        <path d="M 9,39 L 36,39 L 36,36 L 9,36 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 12,36 L 12,32 L 33,32 L 33,36 z" style={{ strokeLinecap: 'butt' }} />
+        {/* Body — slight taper */}
+        <path d="M 14,29.5 L 14,16.5 L 31,16.5 L 31,29.5 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 31,29.5 L 32.5,32 L 12.5,32 L 14,29.5" />
+        {/* Top taper */}
+        <path d="M 14,16.5 L 11,14 L 34,14 L 31,16.5 z" style={{ strokeLinecap: 'butt' }} />
+        {/* Crenellations */}
+        <path d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14 z" style={{ strokeLinecap: 'butt' }} />
+        {/* Detail line */}
+        <path d="M 11,14 L 34,14" style={{ fill: 'none' }} />
+      </g>
+    </svg>
+  ),
+  bR: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: props?.fill ?? '#000000', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <path d="M 9,39 L 36,39 L 36,36 L 9,36 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 12,36 L 12,32 L 33,32 L 33,36 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 14,29.5 L 14,16.5 L 31,16.5 L 31,29.5 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 31,29.5 L 32.5,32 L 12.5,32 L 14,29.5" />
+        <path d="M 14,16.5 L 11,14 L 34,14 L 31,16.5 z" style={{ strokeLinecap: 'butt' }} />
+        <path d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14 z" style={{ strokeLinecap: 'butt' }} />
+        {/* White highlight lines */}
+        <path d="M 12,35.5 L 33,35.5" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+        <path d="M 13,31.5 L 32,31.5" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+        <path d="M 14,29.5 L 31,29.5" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+        <path d="M 14,16.5 L 31,16.5" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+        <path d="M 11,14 L 34,14" style={{ fill: 'none', stroke: '#ffffff', strokeWidth: '1' }} />
+      </g>
+    </svg>
+  ),
+  wB: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: 'none', fillRule: 'evenodd', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <g style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000', strokeLinecap: 'butt' }}>
+          {/* Base scallop */}
+          <path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.65,38.99 6.68,38.97 6,38 C 7.35,36.54 9,36 9,36 z" />
+          {/* Body */}
+          <path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z" />
+          {/* Top ball */}
+          <circle cx="22.5" cy="8" r="2.5" />
+        </g>
+        {/* Cross + detail lines */}
+        <path d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18" style={{ fill: 'none', stroke: '#000000' }} />
+      </g>
+    </svg>
+  ),
+  bB: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: 'none', fillRule: 'evenodd', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <g style={{ fill: props?.fill ?? '#000000', stroke: '#000000', strokeLinecap: 'butt' }}>
+          <path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.65,38.99 6.68,38.97 6,38 C 7.35,36.54 9,36 9,36 z" />
+          <path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z" />
+          <circle cx="22.5" cy="8" r="2.5" />
+        </g>
+        <path d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18" style={{ fill: 'none', stroke: '#ffffff' }} />
+      </g>
+    </svg>
+  ),
+  wN: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: 'none', fillRule: 'evenodd', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        {/* Body and rear */}
+        <path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000' }} />
+        {/* Head, mane, snout */}
+        <path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10" style={{ fill: props?.fill ?? '#ffffff', stroke: '#000000' }} />
+        {/* Eye */}
+        <circle cx="9.5" cy="25.5" r="0.5" style={{ fill: '#000000', stroke: '#000000' }} />
+        {/* Nostril */}
+        <path d="M 15 15.5 A 0.5 1.5 0 1 1 14,15.5 A 0.5 1.5 0 1 1 15 15.5 z" transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)" style={{ fill: '#000000', stroke: '#000000' }} />
+      </g>
+    </svg>
+  ),
+  bN: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <g style={{ fill: 'none', fillRule: 'evenodd', stroke: '#000000', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" style={{ fill: props?.fill ?? '#000000', stroke: '#000000' }} />
+        <path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10" style={{ fill: props?.fill ?? '#000000', stroke: '#000000' }} />
+        <circle cx="9.5" cy="25.5" r="0.5" style={{ fill: '#ffffff', stroke: '#ffffff' }} />
+        <path d="M 15 15.5 A 0.5 1.5 0 1 1 14,15.5 A 0.5 1.5 0 1 1 15 15.5 z" transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)" style={{ fill: '#ffffff', stroke: '#ffffff' }} />
+        {/* Highlight on back */}
+        <path d="M 24.55,10.4 L 24.1,11.85 L 24.6,12 C 27.75,13 30.25,14.49 32.5,18.75 C 34.75,23.01 35.75,29.06 35.25,39 L 35.2,39.5 L 37.45,39.5 L 37.5,39 C 38,28.94 36.62,22.15 34.25,17.66 C 31.88,13.17 28.46,11.02 25.06,10.5 L 24.55,10.4 z" style={{ fill: '#ffffff', stroke: 'none' }} />
+      </g>
+    </svg>
+  ),
+  wP: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <path d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 L 34,39.5 C 34,31.58 29.59,27.09 26.59,26.03 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z" style={{
+        fill: props?.fill ?? '#ffffff',
+        stroke: '#000000',
+        strokeWidth: '1.5',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }} />
+    </svg>
+  ),
+  bP: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="100%" height="100%" style={props?.svgStyle}>
+      <path d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 L 34,39.5 C 34,31.58 29.59,27.09 26.59,26.03 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z" style={{
+        fill: props?.fill ?? '#000000',
+        stroke: '#000000',
+        strokeWidth: '1.5',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }} />
+    </svg>
+  ),
 };
