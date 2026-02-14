@@ -1,6 +1,5 @@
-export default function EvalBar({ evaluation, playerColor = 'white' }) {
+export default function EvalBar({ evaluation, playerColor = 'white', height = 360 }) {
   const clampedEval = Math.max(-10, Math.min(10, evaluation ?? 0));
-  // White percentage: eval 0 = 50%, +10 = 100%, -10 = 0%
   const whitePercent = 50 + clampedEval * 5;
 
   const displayEval = evaluation === null
@@ -12,12 +11,11 @@ export default function EvalBar({ evaluation, playerColor = 'white' }) {
   const isFlipped = playerColor === 'black';
 
   return (
-    <div className="flex flex-col items-center mr-2" style={{ height: 360 }}>
+    <div className="flex flex-col items-center mr-2" style={{ height }}>
       <div
         className="relative w-6 rounded overflow-hidden"
         style={{ height: '100%' }}
       >
-        {/* White section */}
         <div
           className="absolute transition-all duration-500 ease-out"
           style={{
@@ -29,7 +27,6 @@ export default function EvalBar({ evaluation, playerColor = 'white' }) {
             height: `${whitePercent}%`,
           }}
         />
-        {/* Black section */}
         <div
           className="absolute transition-all duration-500 ease-out"
           style={{

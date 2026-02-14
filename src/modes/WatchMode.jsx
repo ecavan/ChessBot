@@ -8,6 +8,7 @@ import { playMoveSound } from '../utils/sounds';
 import { estimateElo, computeACPL } from '../utils/elo';
 import { getEloDisplay } from '../utils/eloDisplay';
 import { OPENINGS } from '../data/openings';
+import { useBoardSize } from '../hooks/useBoardSize';
 
 const WATCH_DEPTH = 18;
 const openingKeys = Object.keys(OPENINGS);
@@ -18,7 +19,8 @@ function pickRandomOpening() {
   return { name: OPENINGS[key].name, moves: OPENINGS[key].moves };
 }
 
-export default function WatchMode({ engine }) {
+export default function WatchMode({ engine, preferences = {} }) {
+  const boardSize = useBoardSize();
   const {
     evaluation: engineEval,
     analyze: engineAnalyze,
@@ -39,6 +41,7 @@ export default function WatchMode({ engine }) {
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(2000);
   const [openingName, setOpeningName] = useState('');
   const [displayEval, setDisplayEval] = useState(null);
+  const [lastMove, setLastMove] = useState(null);
   const isThinkingRef = useRef(false);
   const autoPlayRef = useRef(false);
   autoPlayRef.current = autoPlay;
@@ -101,6 +104,7 @@ export default function WatchMode({ engine }) {
       const move = game.move({ from, to, promotion });
       if (move) {
         playMoveSound(game, move);
+        setLastMove({ from, to });
 
         // Classify the move if we have eval data
         let classification = null;
@@ -181,6 +185,7 @@ export default function WatchMode({ engine }) {
     setIsThinking(false);
     isThinkingRef.current = false;
     setDisplayEval(null);
+    setLastMove(null);
     setAutoPlay(false);
 
     const opening = pickRandomOpening();
@@ -244,13 +249,16 @@ export default function WatchMode({ engine }) {
       </div>
 
       <div className="flex gap-4 items-start">
-        <EvalBar evaluation={displayEval} playerColor={boardOrientation} />
+        <EvalBar evaluation={displayEval} playerColor={boardOrientation} height={boardSize} />
 
         <Board
           fen={fen}
           onMove={() => false}
           playerColor={boardOrientation}
           disabled={true}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         <div className="flex flex-col gap-3 w-60">

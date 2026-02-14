@@ -7,8 +7,10 @@ import HintPanel from '../components/HintPanel';
 import { OPENINGS } from '../data/openings';
 import { generateHint } from '../engine/hints';
 import { playMoveSound } from '../utils/sounds';
+import { useBoardSize } from '../hooks/useBoardSize';
 
-export default function OpeningSandbox({ engine }) {
+export default function OpeningSandbox({ engine, preferences = {} }) {
+  const boardSize = useBoardSize();
   // Destructure engine: functions are stable, reactive values change
   const {
     evaluation: engineEval,
@@ -33,6 +35,7 @@ export default function OpeningSandbox({ engine }) {
   const [isOpeningPhase, setIsOpeningPhase] = useState(true);
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
+  const [lastMove, setLastMove] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintData, setHintData] = useState(null);
@@ -50,6 +53,7 @@ export default function OpeningSandbox({ engine }) {
       const move = game.move({ from, to, promotion });
       if (move) {
         playMoveSound(game, move);
+        setLastMove({ from, to });
         setHistory((prev) => [...prev, { san: move.san, classification: null }]);
         setFen(game.fen());
         return move;
@@ -72,6 +76,7 @@ export default function OpeningSandbox({ engine }) {
         const move = gameRef.current.move({ from, to, promotion });
         if (move) {
           playMoveSound(gameRef.current, move);
+          setLastMove({ from, to });
           setHistory((prev) => [...prev, { san: move.san, classification: null }]);
           setFen(gameRef.current.fen());
         }
@@ -145,6 +150,7 @@ export default function OpeningSandbox({ engine }) {
       if (uci === expectedMove) {
         // Correct book move
         playMoveSound(game, move);
+        setLastMove({ from, to });
         setSquareStyles({
           [from]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
           [to]: { backgroundColor: 'rgba(0, 200, 0, 0.4)' },
@@ -202,6 +208,7 @@ export default function OpeningSandbox({ engine }) {
       // Free play phase
       engineSetMultiPV(1);
       playMoveSound(game, move);
+      setLastMove({ from, to });
       setHistory((prev) => [...prev, { san: move.san, classification: null }]);
       setFen(game.fen());
       setFeedback(null);
@@ -226,6 +233,7 @@ export default function OpeningSandbox({ engine }) {
     game.undo();
     setHistory((prev) => prev.slice(0, -2));
     setFen(game.fen());
+    setLastMove(null);
     setArrows([]);
     setSquareStyles({});
     setHintLevel(0);
@@ -272,6 +280,7 @@ export default function OpeningSandbox({ engine }) {
     setIsOpeningPhase(true);
     setArrows([]);
     setSquareStyles({});
+    setLastMove(null);
     setIsThinking(false);
     setHintLevel(0);
     setHintData(null);
@@ -343,7 +352,7 @@ export default function OpeningSandbox({ engine }) {
       <div className="flex gap-4 items-start">
         {/* Eval bar in free play */}
         {!isOpeningPhase && (
-          <EvalBar evaluation={engineEval} playerColor={boardColor} />
+          <EvalBar evaluation={engineEval} playerColor={boardColor} height={boardSize} />
         )}
 
         {/* Board */}
@@ -355,6 +364,9 @@ export default function OpeningSandbox({ engine }) {
           playerColor={boardColor}
           disabled={!isPlayerTurn || isThinking}
           onSquareClick={handleBoardClick}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         {/* Side panel */}

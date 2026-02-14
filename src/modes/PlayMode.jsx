@@ -13,6 +13,7 @@ import { OPENINGS } from '../data/openings';
 import { playMoveSound } from '../utils/sounds';
 import { estimateElo, computeACPL } from '../utils/elo';
 import { getEloDisplay } from '../utils/eloDisplay';
+import { useBoardSize } from '../hooks/useBoardSize';
 
 function uciToSan(uci, fen) {
   try {
@@ -89,7 +90,8 @@ const DIFFICULTIES = [
   { label: 'Max', skill: 20, depth: 16 },
 ];
 
-export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
+export default function PlayMode({ engine, onGameEnd, onReviewGame, preferences = {} }) {
+  const boardSize = useBoardSize();
   // Destructure engine: functions are stable (useCallback with []), values change
   const {
     isReady: engineReady,
@@ -111,7 +113,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
   const gameRef = useRef(new Chess());
   const [fen, setFen] = useState(gameRef.current.fen());
   const [history, setHistory] = useState([]);
-  const [settings, setSettings] = useState({
+  const PLAY_DEFAULTS = {
     skillLevel: 5,
     blunderWarnings: true,
     showThreats: true,
@@ -122,9 +124,17 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     hintsAvailable: true,
     playerColor: 'white',
     engineDepth: 10,
+  };
+  const [settings, setSettings] = useState(() => {
+    try {
+      return { ...PLAY_DEFAULTS, ...JSON.parse(localStorage.getItem('chess-trainer-play-settings')) };
+    } catch {
+      return PLAY_DEFAULTS;
+    }
   });
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
+  const [lastMove, setLastMove] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintData, setHintData] = useState(null);
@@ -145,6 +155,11 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     ? (Math.random() < 0.5 ? 'white' : 'black')
     : settings.playerColor;
   const [boardOrientation, setBoardOrientation] = useState(actualColor);
+
+  // Persist play settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('chess-trainer-play-settings', JSON.stringify(settings));
+  }, [settings]);
 
   // Set engine skill level when settings change
   useEffect(() => {
@@ -237,6 +252,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
         // Track engine UCI move for book detection
         uciHistoryRef.current = [...uciHistoryRef.current, uciMove];
 
+        setLastMove({ from, to });
         setHistory((prev) => [...prev, {
           san: move.san,
           fen: game.fen(),
@@ -293,6 +309,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     engineSetMultiPV(1);
 
     // Commit the move to state immediately
+    setLastMove({ from, to });
     setHistory((prev) => [...prev, { san: move.san, fen: game.fen(), classification: null }]);
     setCurrentMoveIndex((prev) => prev + 1);
     setFen(game.fen());
@@ -420,6 +437,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setHistory((prev) => prev.slice(0, -1));
     setCurrentMoveIndex((prev) => prev - 1);
     setFen(game.fen());
+    setLastMove(null);
     engineAnalyze(game.fen(), ANALYSIS_DEPTH);
   }, [engineAnalyze]);
 
@@ -435,6 +453,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setFen(game.fen());
     setGameOver(null);
     setMoveIndicator(null);
+    setLastMove(null);
     engineAnalyze(game.fen(), ANALYSIS_DEPTH);
   }, [history.length, isThinking, engineAnalyze]);
 
@@ -462,6 +481,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
     setMoveIndicator(null);
     setBrilliantFlash(false);
     setRunningAccuracy(null);
+    setLastMove(null);
 
     engineNewGame();
     engineSetSkillLevel(s.skillLevel);
@@ -686,7 +706,7 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
 
       <div className="flex gap-4 items-start">
         {settings.showEval && (
-          <EvalBar evaluation={engineEval} playerColor={boardOrientation} />
+          <EvalBar evaluation={engineEval} playerColor={boardOrientation} height={boardSize} />
         )}
 
         <Board
@@ -697,6 +717,9 @@ export default function PlayMode({ engine, onGameEnd, onReviewGame }) {
           playerColor={boardOrientation}
           disabled={isThinking || !!gameOver || !!blunderAlert}
           onSquareClick={handleBoardClick}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         <div className="flex flex-col gap-3 w-60">

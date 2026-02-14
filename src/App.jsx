@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useStockfish } from './engine/useStockfish';
+import { usePreferences } from './hooks/usePreferences';
+import { BOARD_THEMES } from './data/boardThemes';
 import PlayMode from './modes/PlayMode';
 import OpeningSandbox from './modes/OpeningSandbox';
 import ReviewMode from './modes/ReviewMode';
@@ -16,10 +18,13 @@ const MODES = [
   { key: 'watch', label: 'Watch' },
 ];
 
+const THEME_KEYS = Object.keys(BOARD_THEMES);
+
 export default function App() {
   const engine = useStockfish();
   const [activeMode, setActiveMode] = useState('play');
   const [lastGamePgn, setLastGamePgn] = useState(null);
+  const [prefs, updatePrefs] = usePreferences();
 
   const handleModeChange = useCallback((mode) => {
     setActiveMode(mode);
@@ -79,25 +84,50 @@ export default function App() {
             {label}
           </button>
         ))}
+
+        {/* Theme picker */}
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 mr-1">Theme</span>
+          {THEME_KEYS.map((key) => {
+            const t = BOARD_THEMES[key];
+            const isActive = prefs.boardTheme === key;
+            return (
+              <button
+                key={key}
+                onClick={() => updatePrefs({ boardTheme: key })}
+                title={t.name}
+                className="transition-transform hover:scale-110"
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 4,
+                  background: `linear-gradient(135deg, ${t.light} 50%, ${t.dark} 50%)`,
+                  border: isActive ? '2px solid #60a5fa' : '2px solid transparent',
+                  boxShadow: isActive ? '0 0 6px rgba(96,165,250,0.5)' : 'none',
+                }}
+              />
+            );
+          })}
+        </div>
       </nav>
       <main className="p-6 flex justify-center">
         {activeMode === 'play' && (
-          <PlayMode engine={engine} onGameEnd={handleGameEnd} onReviewGame={handleReviewGame} />
+          <PlayMode engine={engine} onGameEnd={handleGameEnd} onReviewGame={handleReviewGame} preferences={prefs} />
         )}
         {activeMode === 'openings' && (
-          <OpeningSandbox engine={engine} />
+          <OpeningSandbox engine={engine} preferences={prefs} />
         )}
         {activeMode === 'endgames' && (
-          <EndgameTrainer engine={engine} />
+          <EndgameTrainer engine={engine} preferences={prefs} />
         )}
         {activeMode === 'puzzles' && (
-          <PuzzlesTrainer engine={engine} />
+          <PuzzlesTrainer preferences={prefs} />
         )}
         {activeMode === 'review' && (
-          <ReviewMode engine={engine} initialPgn={lastGamePgn} />
+          <ReviewMode engine={engine} initialPgn={lastGamePgn} preferences={prefs} />
         )}
         {activeMode === 'watch' && (
-          <WatchMode engine={engine} />
+          <WatchMode engine={engine} preferences={prefs} />
         )}
       </main>
     </div>

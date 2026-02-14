@@ -7,6 +7,7 @@ import HintPanel from '../components/HintPanel';
 import { generateHint } from '../engine/hints';
 import { ENDGAMES } from '../data/endgames';
 import { playMoveSound, sounds } from '../utils/sounds';
+import { useBoardSize } from '../hooks/useBoardSize';
 
 const DIFFICULTY_STYLES = {
   beginner: 'bg-green-900 text-green-300',
@@ -21,7 +22,8 @@ const sortedEndgames = Object.entries(ENDGAMES).sort(
   (a, b) => DIFFICULTY_ORDER[a[1].difficulty] - DIFFICULTY_ORDER[b[1].difficulty]
 );
 
-export default function EndgameTrainer({ engine }) {
+export default function EndgameTrainer({ engine, preferences = {} }) {
+  const boardSize = useBoardSize();
   const {
     evaluation: engineEval,
     topLines: engineTopLines,
@@ -44,6 +46,7 @@ export default function EndgameTrainer({ engine }) {
   const [success, setSuccess] = useState(false);
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
+  const [lastMove, setLastMove] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintData, setHintData] = useState(null);
 
@@ -66,6 +69,7 @@ export default function EndgameTrainer({ engine }) {
     setSuccess(false);
     setArrows([]);
     setSquareStyles({});
+    setLastMove(null);
     setHintLevel(0);
     setHintData(null);
     setIsThinking(false);
@@ -99,6 +103,7 @@ export default function EndgameTrainer({ engine }) {
         const move = game.move({ from, to, promotion });
         if (move) {
           playMoveSound(game, move);
+          setLastMove({ from, to });
           setHistory((prev) => [...prev, { san: move.san, classification: null }]);
           setFen(game.fen());
 
@@ -127,6 +132,7 @@ export default function EndgameTrainer({ engine }) {
 
     engineSetMultiPV(1);
     playMoveSound(game, move);
+    setLastMove({ from, to });
     setHistory((prev) => [...prev, { san: move.san, classification: null }]);
     setMoveCount((prev) => prev + 1);
     setFen(game.fen());
@@ -165,6 +171,7 @@ export default function EndgameTrainer({ engine }) {
     setMoveCount((prev) => Math.max(0, prev - 1));
     setFen(game.fen());
     setSuccess(false);
+    setLastMove(null);
     setArrows([]);
     setSquareStyles({});
     setHintLevel(0);
@@ -279,7 +286,7 @@ export default function EndgameTrainer({ engine }) {
       </div>
 
       <div className="flex gap-4 items-start">
-        <EvalBar evaluation={engineEval} playerColor="white" />
+        <EvalBar evaluation={engineEval} playerColor="white" height={boardSize} />
 
         <Board
           fen={fen}
@@ -289,6 +296,9 @@ export default function EndgameTrainer({ engine }) {
           playerColor="white"
           disabled={isThinking || success || gameOverDraw}
           onSquareClick={handleBoardClick}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         <div className="flex flex-col gap-3 w-72">

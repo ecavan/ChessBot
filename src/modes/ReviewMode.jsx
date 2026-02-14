@@ -5,6 +5,7 @@ import EvalBar from '../components/EvalBar';
 import ReviewPanel from '../components/ReviewPanel';
 import { classifyMove, explainMove } from '../engine/analysis';
 import { estimateElo, computeACPL } from '../utils/elo';
+import { useBoardSize } from '../hooks/useBoardSize';
 
 function uciToSan(uci, fen) {
   try {
@@ -19,7 +20,8 @@ function uciToSan(uci, fen) {
   }
 }
 
-export default function ReviewMode({ engine, initialPgn }) {
+export default function ReviewMode({ engine, initialPgn, preferences = {} }) {
+  const boardSize = useBoardSize();
   const {
     getBestMove: engineGetBestMove,
     stop: engineStop,
@@ -39,6 +41,7 @@ export default function ReviewMode({ engine, initialPgn }) {
   const displayGameRef = useRef(new Chess());
   const [displayFen, setDisplayFen] = useState(displayGameRef.current.fen());
   const [arrows, setArrows] = useState([]);
+  const [lastMove, setLastMove] = useState(null);
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState(null);
   const cancelRef = useRef(false);
@@ -164,6 +167,8 @@ export default function ReviewMode({ engine, initialPgn }) {
         displayGameRef.current.move(results[0].san);
         setDisplayFen(displayGameRef.current.fen());
         setCurrentIndex(0);
+        const pm = results[0].playerMove;
+        if (pm) setLastMove({ from: pm.from, to: pm.to });
         if (results[0].bestMove) {
           const from = results[0].bestMove.slice(0, 2);
           const to = results[0].bestMove.slice(2, 4);
@@ -194,9 +199,13 @@ export default function ReviewMode({ engine, initialPgn }) {
     setCurrentIndex(index);
     const entry = analysis[index];
     displayGameRef.current = new Chess(entry.fen);
-    // Make the player's move to show the resulting position
     displayGameRef.current.move(entry.san);
     setDisplayFen(displayGameRef.current.fen());
+
+    // Set last move highlight from the played move
+    const pm = entry.playerMove;
+    if (pm) setLastMove({ from: pm.from, to: pm.to });
+    else setLastMove(null);
 
     // Show best move arrow from the position before the move
     if (entry.bestMove) {
@@ -232,6 +241,7 @@ export default function ReviewMode({ engine, initialPgn }) {
     setIsExploring(true);
     setExploreMoves((prev) => [...prev, { san: move.san, fen: game.fen() }]);
     setDisplayFen(game.fen());
+    setLastMove({ from, to });
     setArrows([]);
 
     // Run engine analysis on the new position
@@ -362,7 +372,7 @@ export default function ReviewMode({ engine, initialPgn }) {
       </p>
 
       <div className="flex gap-4">
-        <EvalBar evaluation={evalToShow} playerColor="white" />
+        <EvalBar evaluation={evalToShow} playerColor="white" height={boardSize} />
 
         <Board
           fen={displayFen}
@@ -370,6 +380,9 @@ export default function ReviewMode({ engine, initialPgn }) {
           arrows={arrows}
           playerColor="white"
           disabled={false}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         <div className="flex flex-col gap-3 w-72">

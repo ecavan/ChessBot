@@ -4,6 +4,7 @@ import Board from '../components/Board';
 import { PUZZLES, DIFFICULTY_ORDER } from '../data/puzzles';
 import { getThreats, getPlayerThreats, getProtectionArrows, getForkArrows } from '../utils/arrows';
 import { playMoveSound, sounds } from '../utils/sounds';
+import { useBoardSize } from '../hooks/useBoardSize';
 
 const DIFFICULTY_STYLES = {
   beginner: 'bg-green-900 text-green-300',
@@ -46,7 +47,8 @@ function getRandomPuzzle(difficulty) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export default function PuzzlesTrainer() {
+export default function PuzzlesTrainer({ preferences = {} }) {
+  const boardSize = useBoardSize();
   const [difficulty, setDifficulty] = useState('all');
   const [activePuzzle, setActivePuzzle] = useState(null);
   const gameRef = useRef(new Chess());
@@ -57,6 +59,7 @@ export default function PuzzlesTrainer() {
   const [feedback, setFeedback] = useState(null);
   const [arrows, setArrows] = useState([]);
   const [squareStyles, setSquareStyles] = useState({});
+  const [lastMove, setLastMove] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
   const [showThreats, setShowThreats] = useState(false);
   const [showPlayerThreats, setShowPlayerThreats] = useState(false);
@@ -74,6 +77,7 @@ export default function PuzzlesTrainer() {
     setFeedback(null);
     setArrows([]);
     setSquareStyles({});
+    setLastMove(null);
     setHintLevel(0);
     setIsAnimating(false);
   }, []);
@@ -102,6 +106,7 @@ export default function PuzzlesTrainer() {
       try {
         const move = gameRef.current.move({ from, to, promotion });
         if (move) {
+          setLastMove({ from, to });
           setHistory((prev) => [...prev, { san: move.san, isPlayer: false }]);
           setFen(gameRef.current.fen());
           playMoveSound(gameRef.current, move);
@@ -156,6 +161,7 @@ export default function PuzzlesTrainer() {
       const move = gameRef.current.move({ from, to, promotion: expectedPromo || 'q' });
       if (!move) return false;
 
+      setLastMove({ from, to });
       setHistory((prev) => [...prev, { san: move.san, isPlayer: true }]);
       setFen(gameRef.current.fen());
       playMoveSound(gameRef.current, move);
@@ -344,6 +350,9 @@ export default function PuzzlesTrainer() {
           playerColor={boardColor}
           disabled={success || isAnimating}
           onSquareClick={handleBoardClick}
+          theme={preferences.boardTheme}
+          lastMove={lastMove}
+          boardSize={boardSize}
         />
 
         <div className="flex flex-col gap-3 w-72">
