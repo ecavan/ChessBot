@@ -9,7 +9,7 @@ import { estimateElo, computeACPL } from '../utils/elo';
 import { getEloDisplay } from '../utils/eloDisplay';
 import { OPENINGS } from '../data/openings';
 
-const WATCH_DEPTH = 16;
+const WATCH_DEPTH = 18;
 const openingKeys = Object.keys(OPENINGS);
 
 // Pick a random opening and return its book moves
@@ -38,6 +38,7 @@ export default function WatchMode({ engine }) {
   const [autoPlay, setAutoPlay] = useState(false);
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(2000);
   const [openingName, setOpeningName] = useState('');
+  const [displayEval, setDisplayEval] = useState(null);
   const isThinkingRef = useRef(false);
   const evalBeforeRef = useRef(null);
   const autoPlayRef = useRef(false);
@@ -56,10 +57,14 @@ export default function WatchMode({ engine }) {
     engineAnalyze(gameRef.current.fen(), WATCH_DEPTH);
   }, [engineSetSkillLevel, engineSetMultiPV, engineAnalyze]);
 
-  // Store eval for classification
+  // Store eval for classification + normalize for display
   useEffect(() => {
     if (engineEval !== null) {
       evalBeforeRef.current = engineEval;
+      // Normalize to white's perspective for the eval bar
+      // engineEval is from side-to-move perspective (Stockfish convention)
+      const turn = gameRef.current.turn();
+      setDisplayEval(turn === 'b' ? -engineEval : engineEval);
     }
   }, [engineEval]);
 
@@ -115,6 +120,9 @@ export default function WatchMode({ engine }) {
               bestUci: uciMove,
             });
             evalBeforeRef.current = evalAfter;
+            // Normalize to white's perspective for the eval bar
+            // evalAfter is from new side-to-move's perspective
+            setDisplayEval(move.color === 'w' ? -evalAfter : evalAfter);
           }
         }
 
@@ -173,6 +181,7 @@ export default function WatchMode({ engine }) {
     setIsThinking(false);
     isThinkingRef.current = false;
     evalBeforeRef.current = null;
+    setDisplayEval(null);
     setAutoPlay(false);
 
     const opening = pickRandomOpening();
@@ -236,7 +245,7 @@ export default function WatchMode({ engine }) {
       </div>
 
       <div className="flex gap-4 items-start">
-        <EvalBar evaluation={engineEval} playerColor={boardOrientation} />
+        <EvalBar evaluation={displayEval} playerColor={boardOrientation} />
 
         <Board
           fen={fen}

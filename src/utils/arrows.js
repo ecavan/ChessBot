@@ -38,18 +38,30 @@ export function getProtectionArrows(game) {
     const playerColor = game.turn();
     const oppColor = playerColor === 'w' ? 'b' : 'w';
     const board = game.board();
-    const arrows = [];
 
+    // First, find which player pieces are under attack by the opponent
+    const fen = game.fen();
+    const parts = fen.split(' ');
+    parts[1] = oppColor;
+    let oppGame;
+    try { oppGame = new Chess(parts.join(' ')); } catch { return []; }
+    const attackedSquares = new Set();
+    for (const move of oppGame.moves({ verbose: true })) {
+      if (move.captured) attackedSquares.add(move.to);
+    }
+
+    // Only show protection arrows for pieces that are under attack
+    const arrows = [];
     for (const row of board) {
       for (const cell of row) {
         if (!cell || cell.color !== playerColor || cell.type === 'k') continue;
+        if (!attackedSquares.has(cell.square)) continue;
 
         const sq = cell.square;
         const testGame = new Chess(game.fen());
         testGame.remove(sq);
         testGame.put({ type: cell.type, color: oppColor }, sq);
 
-        // Ensure it's the player's turn so we find player's captures
         const testParts = testGame.fen().split(' ');
         testParts[1] = playerColor;
         let flipped;
