@@ -1,11 +1,11 @@
 /**
- * Train: the scratch pad (a board to think on), opening lines and endgame technique.
+ * Train: opening courses (chessreps-style, with a coach), middlegame practice from those
+ * openings, checkmate patterns, endgame basics and the scratch pad.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, Toggle, Seg, Spinner, fmtScore } from '../ui/kit.jsx';
-import { OPENINGS } from '../data/openings.js';
 import { ENDGAMES } from '../data/endgames.js';
 import { START, playUci, uciOf, lineSan, uciToSan } from '../lib/chessutil.js';
 import { pieces as parsePieces, control, hanging, threatArrows, reach, validFen } from '../lib/insight.js';
@@ -18,12 +18,16 @@ import { useLiveEval } from '../engine/useEngine.js';
 import { href, go } from '../lib/router.js';
 import { openingOf, loadBook } from '../lib/book.js';
 import { NavButtons } from './Play.jsx';
+import Course from './Course.jsx';
+import { loadCourses, loadCourse, courseStats } from '../lib/repertoire.js';
+import { planNow, threatNow } from '../lib/coachEngine.js';
 
 export default function Train({ route }) {
   const [, sub, id] = route.parts;
   if (sub === 'scratch') return <ScratchPad key={route.key} initFen={route.query.fen} />;
-  if (sub === 'openings' && OPENINGS[id]) return <OpeningDrill key={id} id={id} />;
+  if (sub === 'openings' && id) return <Course key={id} id={id} mode={route.query.mode} />;
   if (sub === 'endgames' && ENDGAMES[id]) return <EndgameDrill key={id} id={id} />;
+  if (sub === 'notes') return <Notes />;
   return <Hub />;
 }
 
@@ -32,56 +36,85 @@ const saveTrain = (patch) => save(KEYS.train, { ...trainState(), ...patch });
 
 function Hub() {
   const st = trainState();
+  const [courses, setCourses] = useState(null);
+  const [stats, setStats] = useState({});
+  useEffect(() => {
+    loadCourses().then(async (ix) => {
+      setCourses(ix);
+      const out = {};
+      for (const c of ix) { try { out[c.id] = courseStats(await loadCourse(c.id)); } catch { /* skip */ } }
+      setStats(out);
+    }).catch(() => setCourses([]));
+  }, []);
+  const card = (c) => {
+    const s = stats[c.id];
+    return (
+      <a key={c.id} href={`#/train/openings/${c.id}`} className="card-link !p-4 flex flex-col">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold text-white">{c.name}</span>
+          {s?.due ? <span className="tag !text-amber-300">{s.due} due</span> : s?.learned ? <span className="tag !text-emerald-300">{s.learned}/{s.total}</span> : <span className="tag">{s ? `${s.total} lines` : '…'}</span>}
+        </div>
+        <div className="text-xs text-ink-300 mt-1.5 leading-relaxed flex-1">{c.blurb}</div>
+        {s && <div className="bar mt-3"><i style={{ width: `${(s.learned / Math.max(1, s.total)) * 100}%`, background: '#10b981' }} /></div>}
+      </a>
+    );
+  };
+  const white = (courses || []).filter(c => c.color === 'w'), black = (courses || []).filter(c => c.color === 'b');
+  const MATES = [['mateIn2', 'Mate in 2'], ['mateIn3', 'Mate in 3'], ['backRankMate', 'Back-rank mate'], ['smotheredMate', 'Smothered mate'], ['arabianMate', 'Arabian mate'], ['anastasiaMate', 'Anastasia mate'], ['hookMate', 'Hook mate'], ['doubleBishopMate', 'Two bishops mate']];
   return (
-    <div className="page fade-up space-y-6">
+    <div className="page fade-up space-y-7">
       <div>
         <h1 className="h-title">Train</h1>
-        <p className="muted mt-1">Think on a board, drill opening lines, and learn to convert endgames.</p>
+        <p className="muted mt-1">Learn your openings line by line, including what people really play against you, then play the middlegame out with a coach.</p>
       </div>
-      <a href="#/train/scratch" className="card-link flex items-center justify-between gap-4 !border-sky-700/50">
-        <div>
+
+      {!courses ? <div className="text-ink-300 flex items-center gap-2"><Spinner /> Loading courses…</div> : (
+        <>
+          <section>
+            <div className="h-sec mb-3">Openings as White</div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{white.map(card)}</div>
+          </section>
+          <section>
+            <div className="h-sec mb-3">Openings as Black</div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{black.map(card)}</div>
+          </section>
+        </>
+      )}
+
+      <section className="grid md:grid-cols-2 gap-4">
+        <a href="#/train/notes" className="card-link">
+          <div className="h-sec !text-sky-300">Middlegame</div>
+          <div className="text-white text-lg font-semibold mt-1">What to do after the opening</div>
+          <div className="text-sm text-ink-300 mt-1">The coach's checklist: safety first, then plans. Short, with examples you can play out.</div>
+        </a>
+        <a href="#/train/scratch" className="card-link">
           <div className="h-sec !text-sky-300">Scratch pad</div>
-          <div className="text-white text-lg font-semibold mt-1">A board to calculate on</div>
-          <div className="text-sm text-ink-300 mt-1 max-w-xl">Move both sides through a line, drop a knight anywhere and see what it hits, show every square each side controls and every loose piece. Save candidate lines, then let the engine grade them.</div>
-        </div>
-        <span className="btn btn-primary">Open</span>
-      </a>
-
-      <section>
-        <div className="h-sec mb-3">Openings</div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Object.entries(OPENINGS).map(([k, o]) => {
-            const p = st.openings[k];
-            return (
-              <a key={k} href={`#/train/openings/${k}`} className="card-link !p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-white">{o.name}</span>
-                  <span className="tag">{o.color === 'white' ? 'White' : 'Black'}</span>
-                </div>
-                <div className="text-xs text-ink-300 mt-1">{Math.ceil(o.moves.length / 2)} moves{p ? ` · ${p.clean}/${p.runs} clean runs` : ''}</div>
-              </a>
-            );
-          })}
-        </div>
+          <div className="text-white text-lg font-semibold mt-1">A board to think on</div>
+          <div className="text-sm text-ink-300 mt-1">Play lines for both sides, see what pieces hit, ask the coach for threats and a plan.</div>
+        </a>
       </section>
 
       <section>
-        <div className="h-sec mb-3">Endgames</div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Object.entries(ENDGAMES).map(([k, e]) => {
-            const p = st.endgames[k];
-            return (
-              <a key={k} href={`#/train/endgames/${k}`} className="card-link !p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-white">{e.name}</span>
-                  {p?.best ? <span className="tag !text-emerald-300">✓ {p.best} moves</span> : <span className="tag">{e.difficulty}</span>}
-                </div>
-                <div className="text-xs text-ink-300 mt-1">{e.description}</div>
-              </a>
-            );
-          })}
-        </div>
+        <div className="h-sec mb-3">Checkmate patterns</div>
+        <div className="flex flex-wrap gap-2">{MATES.map(([t, n]) => <a key={t} className="btn btn-sm" href={href('/puzzles/solve', { mode: 'theme', theme: t })}>{n}</a>)}</div>
       </section>
+
+      <details className="disc">
+        <summary>Endgame basics</summary>
+        <div className="body">
+          <div className="grid sm:grid-cols-2 gap-2">
+            {Object.entries(ENDGAMES).map(([k, e]) => {
+              const p = st.endgames?.[k];
+              return (
+                <a key={k} href={`#/train/endgames/${k}`} className="row-link border border-ink-700/60">
+                  <span className="flex-1 min-w-0"><span className="block text-sm font-semibold text-white">{e.name}</span><span className="block text-xs text-ink-300 truncate">{e.description}</span></span>
+                  {p?.best ? <span className="tag !text-emerald-300">✓ {p.best}</span> : <span className="tag">{e.difficulty}</span>}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -108,7 +141,6 @@ function placementToFen(pos, turn = 'w') {
   return `${rows.join('/')} ${turn} ${castle || '-'} - 0 1`;
 }
 
-const TINT = { w: 'rgba(56,189,248,', b: 'rgba(244,63,94,' };
 
 function ScratchPad({ initFen }) {
   const [prefs] = usePrefs();
@@ -116,15 +148,16 @@ function ScratchPad({ initFen }) {
   const [base, setBase] = useState(() => (initFen && validFen(initFen) ? initFen : saved?.base && validFen(saved.base) ? saved.base : START));
   const [line, setLine] = useState(() => (initFen ? [] : saved?.line || []));
   const [ply, setPly] = useState(() => (initFen ? 0 : saved?.line?.length || 0));
-  const [mode, setMode] = useState('play'); // play | free | draw
+  const [mode, setMode] = useState('play'); // play | free
   const [flip, setFlip] = useState(false);
   const [sel, setSel] = useState(null);
   const [showReach, setShowReach] = useState(true);
-  const [showControl, setShowControl] = useState(false);
+  const [showChecks, setShowChecks] = useState(false);
+  const [showCaptures, setShowCaptures] = useState(false);
+  const [coach, setCoach] = useState(null); // { title, items, arrows, circles } | 'busy'
   const [showHanging, setShowHanging] = useState(false);
   const [showThreats, setShowThreats] = useState(false);
   const [engineOn, setEngineOn] = useState(false);
-  const [drawn, setDrawn] = useState({ arrows: [], circles: [] });
   const [palette, setPalette] = useState(null); // 'wN' … or 'x' (remove)
   const [fenText, setFenText] = useState('');
   const [err, setErr] = useState(null);
@@ -133,7 +166,8 @@ function ScratchPad({ initFen }) {
   const stage = useStage({ evalBar: engineOn });
   const set = piecesOf(prefs.pieceStyle);
   const aliveRef = useRef(true);
-  useEffect(() => () => { aliveRef.current = false; engine.cancel(['cand']); }, []);
+  const fenRef = useRef(null);
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; engine.cancel(['cand', 'coach']); }; }, []);
 
   const { fens, moves } = useMemo(() => {
     const g = new Chess(base);
@@ -142,8 +176,9 @@ function ScratchPad({ initFen }) {
     return { fens: f, moves: m };
   }, [base, line]);
   const fen = fens[Math.min(ply, fens.length - 1)];
+  fenRef.current = fen;
   useEffect(() => { saveTrain({ scratch: { base, line, cands } }); }, [base, line, cands]);
-  useEffect(() => { setDrawn({ arrows: [], circles: [] }); }, [fen]);
+  useEffect(() => { setCoach(null); }, [fen]);
   const live = useLiveEval(fen, { on: engineOn && mode !== 'free', multipv: 3, movetime: 8000 });
   useEffect(() => { loadBook(); }, []);
 
@@ -188,27 +223,32 @@ function ScratchPad({ initFen }) {
     setErr(null); setBase(f); setLine([]); setPly(0); setFenText('');
   }
 
-  const onArrow = (from, to) => setDrawn(d => {
-    if (from === to) {
-      const has = d.circles.some(c => c.sq === from);
-      return { ...d, circles: has ? d.circles.filter(c => c.sq !== from) : [...d.circles, { sq: from }] };
+  async function askCoach(kind) {
+    if (!validFen(fen)) return;
+    const g = new Chess(fen);
+    if (g.isGameOver()) { setCoach({ title: 'Game over', items: [g.isCheckmate() ? 'Checkmate.' : 'Draw.'], arrows: [], circles: [] }); return; }
+    setCoach('busy');
+    const at = fen;
+    if (kind === 'threat') {
+      const t = await threatNow(fen);
+      if (at !== fenRef.current || !aliveRef.current) return;
+      const who = fen.split(' ')[1] === 'w' ? 'Black' : 'White';
+      setCoach(t ? { title: `${who}'s threat`, items: [t.text], arrows: t.arrows, circles: [] } : { title: `${who}'s threat`, items: [g.inCheck() ? 'You are in check: deal with that first.' : `Nothing serious: ${who} has no immediate threat here.`], arrows: [], circles: [] });
+    } else {
+      const p = await planNow(fen);
+      if (at !== fenRef.current || !aliveRef.current) return;
+      setCoach({ title: `Plan for ${fen.split(' ')[1] === 'w' ? 'White' : 'Black'}`, items: p.ideas.map(i => `${i.title}: ${i.text}`), arrows: p.arrows, circles: p.circles });
     }
-    const has = d.arrows.some(a => a.from === from && a.to === to);
-    return { ...d, arrows: has ? d.arrows.filter(a => !(a.from === from && a.to === to)) : [...d.arrows, { from, to, color: 'rgba(250,176,5,.85)' }] };
-  });
+  }
 
   // overlays
   const marks = {};
-  const circles = [...drawn.circles];
-  const arrows = [...drawn.arrows];
-  let counts = null;
-  if (showControl) {
-    const ctl = control(fen);
-    counts = Object.fromEntries(Object.entries(ctl).map(([sq, v]) => [sq, { w: v.w.length, b: v.b.length }]));
-    for (const [sq, v] of Object.entries(ctl)) {
-      const d = v.w.length - v.b.length;
-      if (d > 0) marks[sq] = TINT.w + '0.16)';
-      else if (d < 0) marks[sq] = TINT.b + '0.16)';
+  const circles = coach && coach !== 'busy' ? [...coach.circles] : [];
+  const arrows = coach && coach !== 'busy' ? [...coach.arrows] : [];
+  if ((showChecks || showCaptures) && validFen(fen)) {
+    for (const m of new Chess(fen).moves({ verbose: true })) {
+      if (showChecks && m.san.includes('+')) arrows.push({ from: m.from, to: m.to, color: 'rgba(250,204,21,.85)', width: 0.12 });
+      else if (showCaptures && m.captured) arrows.push({ from: m.from, to: m.to, color: 'rgba(251,146,60,.8)', width: 0.12 });
     }
   }
   if (showHanging) for (const h of hanging(fen)) circles.push({ sq: h.square, color: 'rgba(244,63,94,.95)' });
@@ -249,20 +289,20 @@ function ScratchPad({ initFen }) {
     <Stage stage={stage}
       top={<div className="strip"><span className="text-sm font-semibold text-ink-200">Scratch pad{opening ? <span className="text-ink-400 font-normal"> · {opening.name}</span> : ''}</span>
         <span className="text-xs text-ink-300">{turn === 'w' ? 'White' : 'Black'} to move</span></div>}
-      bottom={<div className="strip text-xs text-ink-300">{mode === 'play' ? 'Tap any piece: dots show its moves, blue squares what it controls.' : mode === 'free' ? (palette ? 'Tap a square to place. Tap again to remove.' : 'Drag any piece anywhere; drag it off the board to remove it.') : 'Drag to draw an arrow, tap a square to circle it.'}</div>}
+      bottom={<div className="strip text-xs text-ink-300">{mode === 'play' ? 'Tap any piece: dots show its moves, blue squares what it controls.' : palette ? 'Tap a square to place. Tap again to remove.' : 'Drag any piece anywhere; drag it off the board to remove it.'}</div>}
       evalBar={engineOn ? <EvalBar height={stage.size} orientation={flip ? 'black' : 'white'} line={live.lines[0]} /> : null}
       board={
         <Board fen={fen} orientation={flip ? 'black' : 'white'} size={stage.size}
-          movable={mode === 'play' ? 'both' : 'none'} free={mode === 'free' && !palette} tool={mode === 'draw' ? 'arrow' : null}
+          movable={mode === 'play' ? 'both' : 'none'} free={mode === 'free' && !palette}
           onMove={onMove} onRemove={(s) => { const p = parsePieces(fen); delete p[s]; setBase(placementToFen(p, turn)); setLine([]); setPly(0); }}
-          onArrow={onArrow} onTap={onTap} onSelect={setSel}
+          onTap={onTap} onSelect={setSel}
           lastMove={mode === 'play' && ply > 0 ? moves[ply - 1] : null}
-          arrows={arrows} circles={circles} marks={marks} counts={counts}
+          arrows={arrows} circles={circles} marks={marks}
           reachOf={reachSq ? { squares: reachSq, color: 'rgba(56,189,248,.32)' } : null} />
       }
     >
       <div className="panel panel-pad space-y-3">
-        <Seg value={mode} onChange={setMode2} options={[['play', 'Play moves'], ['free', 'Move freely'], ['draw', 'Draw']]} className="w-full [&>button]:flex-1" />
+        <Seg value={mode} onChange={setMode2} options={[['play', 'Play moves'], ['free', 'Move pieces freely']]} className="w-full [&>button]:flex-1" />
         {err && <div className="text-sm text-rose-300">{err}</div>}
         {mode === 'free' && (
           <div className="space-y-2">
@@ -284,8 +324,25 @@ function ScratchPad({ initFen }) {
             </div>
           </div>
         )}
-        {mode === 'draw' && <button className="btn btn-sm" onClick={() => setDrawn({ arrows: [], circles: [] })} disabled={!drawn.arrows.length && !drawn.circles.length}>Clear drawings</button>}
       </div>
+
+      {mode === 'play' && (
+        <div className="panel panel-pad space-y-2">
+          <div className="h-sec">Coach</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="btn" onClick={() => askCoach('threat')} disabled={coach === 'busy'}>What's the threat?</button>
+            <button className="btn" onClick={() => askCoach('plan')} disabled={coach === 'busy'}>What's the plan?</button>
+          </div>
+          {coach === 'busy' && <div className="text-sm text-ink-300 flex items-center gap-2"><Spinner size={14} /> Thinking…</div>}
+          {coach && coach !== 'busy' && (
+            <div className="verdict v-info fade-up">
+              <div className="font-semibold text-white">{coach.title}</div>
+              <ul className="mt-1 space-y-1.5">{coach.items.map((t, i) => <li key={i} className="text-sm text-ink-200">{t}</li>)}</ul>
+            </div>
+          )}
+          <p className="text-xs text-ink-400">Checks, captures, threats: before every move, look at all three, for both sides.</p>
+        </div>
+      )}
 
       {mode === 'play' && (
         <div className="panel p-2 flex flex-col min-h-[120px] flex-1">
@@ -298,9 +355,10 @@ function ScratchPad({ initFen }) {
       <div className="panel panel-pad">
         <div className="h-sec mb-1">See</div>
         <Toggle on={showReach} onChange={setShowReach} label="What a piece controls" sub="Tap a piece: blue squares are everything it attacks or defends." />
-        <Toggle on={showControl} onChange={setShowControl} label="Control map" sub="How many white (blue) and black (red) pieces hit each square." />
+        <Toggle on={showChecks} onChange={setShowChecks} label="Checks" sub="Yellow arrows: every check the side to move has." />
+        <Toggle on={showCaptures} onChange={setShowCaptures} label="Captures" sub="Orange arrows: every capture the side to move has." />
         <Toggle on={showHanging} onChange={setShowHanging} label="Loose pieces" sub="Red rings on pieces that are attacked and not defended well enough." />
-        <Toggle on={showThreats} onChange={setShowThreats} label="Threats" sub="Captures the other side is threatening." />
+        <Toggle on={showThreats} onChange={setShowThreats} label="Your pieces under attack" sub="Red arrows: captures the other side is threatening." />
         <Toggle on={engineOn} onChange={setEngineOn} label="Engine" sub="Off by default, so you do the thinking." />
         {engineOn && live.lines.length > 0 && (
           <div className="mt-2 space-y-1">
@@ -352,130 +410,64 @@ function ScratchPad({ initFen }) {
   );
 }
 
-// ------------------------------------------------------------------ openings
 
-function OpeningDrill({ id }) {
-  const o = OPENINGS[id];
-  const stage = useStage();
-  const you = o?.color === 'black' ? 'b' : 'w';
-  const [line, setLine] = useState([]); // uci played
-  const [expect, setExpect] = useState(null); // the move you were supposed to play after a slip
-  const [msg, setMsg] = useState(null);
-  const [slips, setSlips] = useState(0);
-  const [surprise, setSurprise] = useState(false);
-  const [target, setTarget] = useState(o?.moves || []); // the line being followed (can switch to a deviation)
-  const [done, setDone] = useState(false);
-  const timers = useRef([]);
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  useEffect(() => { loadBook(); }, []);
+// ------------------------------------------------------------------ middlegame notes
 
-  const { game, moves } = useMemo(() => playUci(START, line), [line]);
-  const fen = game.fen();
-  const turn = game.turn();
+const fenOf = (sans) => { const g = new Chess(); for (const x of sans.split(' ')) g.move(x); return g.fen(); };
+const NOTES = [
+  { t: 'Checks, captures, threats', b: 'Before every move, list every check, capture and threat, first for your opponent ("what does their last move want?"), then for you. Most games under 1500 are decided by a piece that was simply left hanging or a fork nobody looked for. The scratch pad can draw all checks and captures for you while you practise the habit.' },
+  { t: 'Safety first', b: 'Is your king safe? Is every piece defended? Loose pieces drop off: a piece that is attacked and not defended is a gift. Fix safety before starting anything.' },
+  { t: 'Improve your worst piece', b: 'When nothing is happening, find your least active piece (a bishop stuck behind its own pawns, a knight on the edge, a rook still in the corner) and give it a better square. Often that is the whole plan.' },
+  { t: 'Find a target', b: 'A weak pawn, a weak square next to the king, a piece with no defender. Attack it with more pieces than can defend it. Plans are just targets plus the route there.' },
+  { t: 'Pawn breaks open the game', b: 'The pawn move that attacks their pawn chain is how you open lines for your pieces: d4 in the Italian, c5 in the French, …f5 in the King\'s Indian, e4 or c4 against the London. Prepare it, then play it when your pieces are ready.' },
+  { t: 'Rooks on open files', b: 'A file with no pawns is a highway into the enemy camp. Put a rook on it, then double the rooks. A half-open file (only their pawn on it) works too: it pressures that pawn.' },
+  { t: 'Attack where you are stronger', b: 'Play on the side where you have more space or more pieces, or where their king is. If the kings castled on opposite sides, it is a race: push the pawns in front of their king and don\'t worry about your own pawns.' },
+  { t: 'Trade when ahead, not when behind', b: 'Up material? Trade pieces (not pawns); the endgame makes the extra material count. Down material? Keep pieces on and look for activity. Trade your bad pieces for their good ones, never the other way round.' },
+  { t: 'Knights love outposts, bishops love diagonals', b: 'A square in their half that no enemy pawn can ever attack, backed by your pawn, is an outpost. A knight there is often worth a rook. Bishops want open diagonals, so don\'t lock them in with your own pawns.' },
+  { t: 'Don\'t grab poisoned pawns', b: 'Taking a pawn with your queen while your pieces are undeveloped or your king is in the centre usually costs more than a pawn. Count what it costs in time first.' },
+];
+const EXAMPLES = [
+  { name: 'Italian: slow build-up', color: 'w', sans: 'e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O Re1 a6 Bb3 Ba7 h3 h6 Nbd2 Re8', text: 'Classic Giuoco Pianissimo. The plan: Nf1-g3, then the d4 break, or Nh4-f5 against the king.' },
+  { name: "Caro-Kann Advance: space", color: 'w', sans: 'e4 c6 d4 d5 e5 Bf5 Nf3 e6 Be2 c5 O-O Nc6 c3 Qb6', text: 'White has space on the kingside; Black hits d4. Who is attacking what?' },
+  { name: "Queen's Gambit Declined: minority attack", color: 'w', sans: 'd4 d5 c4 e6 Nc3 Nf6 cxd5 exd5 Bg5 Be7 e3 O-O Bd3 Nbd7 Nf3 c6 Qc2 Re8 O-O Nf8', text: 'The famous plan: push b4-b5 to create a weak pawn on c6.' },
+];
 
-  function reset() { timers.current.forEach(clearTimeout); setLine([]); setExpect(null); setMsg(null); setSlips(0); setTarget(o.moves); setDone(false); }
-
-  // opponent replies
-  useEffect(() => {
-    if (!o || done || turn === you) return;
-    const t = setTimeout(() => {
-      const key = line.join(' ');
-      let reply = target[line.length];
-      let explanation = null;
-      if (surprise && Math.random() < 0.45) {
-        const devs = Object.entries(o.deviations || {}).filter(([k, d]) => { const ks = k.split(' '); return ks.length === line.length + 1 && ks.slice(0, -1).join(' ') === key && d.bookResponse; });
-        if (devs.length) {
-          const [k, d] = devs[Math.floor(Math.random() * devs.length)];
-          reply = k.split(' ').at(-1);
-          explanation = d;
-        }
-      }
-      if (!reply) { finish(); return; }
-      const g = new Chess(fen);
-      try { const m = g.move({ from: reply.slice(0, 2), to: reply.slice(2, 4), promotion: reply[4] }); moveSound(m, g.inCheck()); } catch { finish(); return; }
-      let tgt = target;
-      if (explanation) {
-        tgt = [...line, reply, explanation.bookResponse];
-        setTarget(tgt);
-        setMsg({ kind: 'info', text: `Your opponent leaves the book: ${explanation.explanation}` });
-      }
-      setLine(l => [...l, reply]);
-      if (line.length + 1 >= tgt.length) finish();
-    }, 450);
-    timers.current.push(t);
-    return () => clearTimeout(t);
-  }, [line, turn, done]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function finish() {
-    setDone(true);
-    const st = trainState();
-    const p = st.openings[id] || { runs: 0, clean: 0 };
-    saveTrain({ openings: { ...st.openings, [id]: { runs: p.runs + 1, clean: p.clean + (slips === 0 ? 1 : 0) } } });
-    sfx.end();
-  }
-
-  function onMove({ from, to, promotion }) {
-    if (turn !== you || done) return false;
-    const g = new Chess(fen);
-    let m;
-    try { m = g.move({ from, to, promotion }); } catch { return false; }
-    const u = uciOf(m);
-    const want = target[line.length];
-    if (!want) { finish(); return false; }
-    if (u === want) {
-      moveSound(m, g.inCheck());
-      setExpect(null);
-      setMsg(msg?.kind === 'info' ? msg : { kind: 'good', text: `${m.san} ✓` });
-      const next = [...line, u];
-      setLine(next);
-      if (next.length >= target.length) setTimeout(finish, 300);
-      return true;
-    }
-    sfx.bad();
-    setSlips(s => s + 1);
-    const dev = o.deviations?.[[...line, u].join(' ')];
-    setExpect(want);
-    setMsg({ kind: 'bad', text: dev ? dev.explanation : `${m.san} isn't the line. The move here is ${uciToSan(fen, want)}.` });
-    return false;
-  }
-
-  const op = openingOf([START, ...moves.map((m) => m.after)]);
-  const arrows = expect ? [{ from: expect.slice(0, 2), to: expect.slice(2, 4), color: 'rgba(16,185,129,.85)' }] : [];
+function Notes() {
   return (
-    <Stage stage={stage}
-      top={<div className="strip"><span className="text-sm font-semibold text-ink-200">{o.name}</span><span className="text-xs text-ink-300">{op?.name || ''}</span></div>}
-      bottom={<div className="strip text-xs text-ink-300">You play {you === 'w' ? 'White' : 'Black'} · move {Math.min(line.length, target.length)}/{target.length}</div>}
-      board={<Board fen={fen} orientation={you === 'w' ? 'white' : 'black'} size={stage.size} movable={turn === you && !done ? you : 'none'} onMove={onMove}
-        lastMove={moves.at(-1)} arrows={arrows} />}
-    >
-      <div className="panel panel-pad space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-white">{o.name}</h1>
-          <a href="#/train" className="btn btn-quiet btn-sm">All drills</a>
-        </div>
-        {done ? (
-          <div className={`verdict ${slips ? 'v-info' : 'v-good'} pop`}>
-            <div className="font-semibold text-white">{slips ? `Line complete, ${slips} slip${slips > 1 ? 's' : ''}` : 'Clean run!'}</div>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <button className="btn btn-primary" onClick={reset}>Again</button>
-              <a className="btn" href={href('/play', { fen })}>Play on vs a bot</a>
-              <a className="btn col-span-2" href={href('/train/scratch', { fen })}>Explore in the scratch pad</a>
+    <div className="page fade-up max-w-3xl space-y-5">
+      <div>
+        <a href="#/train" className="text-sm text-ink-300">← Train</a>
+        <h1 className="h-title mt-1">After the opening</h1>
+        <p className="muted mt-1">The coach's checklist for the middlegame. When in doubt, ask it in the scratch pad or during a game (What's the threat? What's the plan?).</p>
+      </div>
+      <ol className="space-y-3">
+        {NOTES.map((n, i) => (
+          <li key={i} className="panel panel-pad">
+            <div className="flex gap-3">
+              <span className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-sm font-bold shrink-0">{i + 1}</span>
+              <div><div className="font-semibold text-white">{n.t}</div><p className="text-sm text-ink-200 mt-1 leading-relaxed">{n.b}</p></div>
             </div>
-          </div>
-        ) : msg ? (
-          <div className={`verdict ${msg.kind === 'good' ? 'v-good' : msg.kind === 'bad' ? 'v-bad' : 'v-info'} ${msg.kind === 'bad' ? 'shake' : 'fade-up'}`}>
-            <div className="text-sm text-white">{msg.text}</div>
-          </div>
-        ) : <p className="text-sm text-ink-300">Play the main line. The opponent answers with book moves.</p>}
-        <Toggle on={surprise} onChange={setSurprise} label="Surprise me" sub="The opponent sometimes plays a common sideline, and you have to find the answer." />
-        <button className="btn btn-sm" onClick={reset}>Restart</button>
-      </div>
-      <div className="panel panel-pad">
-        <div className="h-sec mb-2">Ideas</div>
-        <ul className="text-sm text-ink-200 space-y-1.5 list-disc pl-5">{o.principles.map((p, i) => <li key={i}>{p}</li>)}</ul>
-      </div>
-      <div className="panel p-2"><MoveList sans={moves.map(m => m.san)} ply={moves.length} maxHeight={180} /></div>
-    </Stage>
+          </li>
+        ))}
+      </ol>
+      <section>
+        <div className="h-sec mb-2">Practise a plan</div>
+        <div className="grid gap-3">
+          {EXAMPLES.map(x => {
+            const fen = fenOf(x.sans);
+            return (
+              <div key={x.name} className="panel panel-pad flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0"><div className="font-semibold text-white">{x.name}</div><div className="text-sm text-ink-300">{x.text}</div></div>
+                <div className="flex gap-2">
+                  <a className="btn btn-sm" href={href('/train/scratch', { fen })}>Study</a>
+                  <a className="btn btn-sm btn-primary" href={href('/play', { fen, color: x.color, coach: 1 })}>Play it out</a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
   );
 }
 

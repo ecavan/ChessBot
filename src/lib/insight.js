@@ -104,5 +104,12 @@ export function threatArrows(fen) {
 
 /** Can a position be loaded by chess.js (both kings, side not to move not in check…)? */
 export function validFen(fen) {
-  try { new Chess(fen); return true; } catch { return false; }
+  try {
+    new Chess(fen);
+    // the side NOT to move must not be in check (otherwise its king could be captured)
+    const p = fen.split(' ');
+    p[1] = p[1] === 'w' ? 'b' : 'w';
+    p[3] = '-';
+    return !new Chess(p.join(' ')).inCheck();
+  } catch { return false; }
 }

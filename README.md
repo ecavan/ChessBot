@@ -12,7 +12,7 @@ nothing leaves the device.
 - Thirteen opponents, from a 400 beginner up to full-strength Stockfish 17.1.
   - 1400 and above use Stockfish's own strength limiter (`UCI_LimitStrength` / `UCI_Elo`).
   - The weaker bots search shallowly, pick among several candidate moves with some randomness, and now and then play a loose move, so they blunder the way beginners do.
-- Optional assists: progressive hints (first the piece, then the move), threat arrows, a blunder check ("are you sure?" when a move drops your winning chances a lot), and an eval bar.
+- A coach (on by default) and optional assists: progressive hints (first the piece, then the move), threat arrows, a blunder check ("are you sure?" when a move drops your winning chances a lot), and an eval bar.
 - Takebacks, resign, and flip board. The game in progress survives a reload.
 - Finished games are saved for Review.
 - Watch: bot vs bot, with an eval bar.
@@ -22,22 +22,36 @@ nothing leaves the device.
 - A puzzle rating (Glicko-lite) and difficulty settings (easier, normal, harder).
 - A daily puzzle and 70+ themes.
 - A review queue: missed puzzles come back after 1, 3, 7 and 21 days.
-- Scratch pad inside every puzzle: move both sides to test a line before you commit. Nothing played there counts.
+- Scratch pad inside every puzzle: try a line before you commit, with Stockfish answering your moves if you like. Nothing played there counts.
 - **Visualize**, a calculation drill with its own rating.
   - The first move or two of the solution are only *announced*; the board doesn't move.
   - You play the next move from the position in your head.
 
 **Train**
-- Scratch pad, a board to think on:
-  - Play through lines for both sides, with branching.
-  - Move pieces freely, or place and remove them.
-  - Tap a piece to see everything it controls.
-  - A control map that counts white and black attackers on every square.
-  - Loose-piece and threat overlays.
-  - Draw arrows and circles.
-  - Save candidate lines, then let Stockfish grade where each one ends up.
-- Opening lines: 22 openings. Surprise mode throws common sidelines at you.
-- Endgame technique: 10 positions against full-strength Stockfish.
+- Opening courses, chessreps-style. There are 12 courses as White (Italian, 4.Ng5/Fried Liver, Ruy Lopez, Scotch, Vienna, London, Queen's Gambit, and answers to the Sicilian, French, Caro-Kann, Scandinavian and everything else) and 7 as Black (1...e5, Caro-Kann, French, Scandinavian, QGD, Slav, King's Indian).
+  - Each course is a tree built from about 2.7 million Lichess blitz and rapid games between players rated 700–2000. It covers every reply people at that level actually play, with its frequency.
+  - Your moves are the natural moves Stockfish agrees with.
+  - Opponent mistakes are marked with the line that punishes them.
+  - Traps (where the most popular move is a mistake) are flagged.
+  - Three modes:
+    - Explore: walk the tree.
+    - Learn: moves shown and explained.
+    - Practice: from memory, with spaced repetition.
+- Middlegame checklist and example plans to play out with the coach.
+- Checkmate patterns (themed puzzles) and endgame basics.
+- Scratch pad:
+  - Play lines, or move pieces freely.
+  - See what a piece controls.
+  - Checks and captures overlays, loose pieces, pieces under attack.
+  - Ask the coach "what's the threat?" and "what's the plan?".
+  - Grade candidate lines.
+
+**The coach** (built in, offline; `src/lib/coach.js`)
+- Explains moves in plain English using Stockfish's lines plus the classic rules of thumb:
+  - tactics: forks, pins, skewers, discovered attacks, undefended pieces, mates;
+  - development, castling, weakening your king, moving a piece twice, early queen moves, f7/f2, pawn breaks, open files, outposts.
+- Used by Play (after each of your moves, threat warnings, plan ideas), Review, the scratch pad and the opening courses.
+- **Step through**: any line (the better move, what goes wrong after yours, an engine line) can be played one move at a time, or slowly on auto-play, with the reason for each move.
 
 **Review**
 - Import games:
@@ -102,6 +116,9 @@ src/
     review.js           win%, move classes, accuracy, rating estimate
     analyze.js          whole-game analysis (stored with the game)
     games.js            saved games, PGN import, chess.com / Lichess fetch
+    coach.js            the coach: move explanations, threats, plans
+    coachEngine.js      the coach's engine questions (judge a move, find the threat, plan)
+    repertoire.js       opening courses and their spaced repetition
     puzzles.js          puzzle packs, rating, daily, review queue, themes
     insight.js          attacks, control, hanging pieces (scratch pad, assists)
     book.js             opening names by position
@@ -118,6 +135,7 @@ public/
 scripts/
   build-puzzles.py      rebuilds public/puzzles from the Lichess puzzle CSV
   build-openings.mjs    rebuilds public/data/openings.json from lichess-org/chess-openings
+  build-repertoire.py   rebuilds the opening courses (public/data/rep) from Lichess games + Stockfish
 ```
 
 Everything you do is stored in `localStorage` on the device. Settings → Data can export and

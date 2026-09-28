@@ -23,7 +23,7 @@ const TABS = [
 export default function App() {
   const route = useRoute();
   const [prefs] = usePrefs();
-  useEffect(() => { engine.start(prefs.engine); loadBook(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { engine.start(prefs.engine); loadBook(); try { navigator.storage?.persist?.(); } catch { /* not supported */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const firstPref = useRef(true);
   useEffect(() => { if (firstPref.current) { firstPref.current = false; return; } engine.setPref(prefs.engine); }, [prefs.engine]);
   const sec = route.parts[0] || '';

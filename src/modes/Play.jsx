@@ -16,7 +16,11 @@ import { replay, recordPlayed } from '../lib/games.js';
 import { openingOf, loadBook } from '../lib/book.js';
 import { threatArrows, validFen } from '../lib/insight.js';
 import { moveSound, sfx } from '../lib/sound.js';
-import { winPct, cpOf } from '../lib/review.js';
+import { winPct, cpOf, CLASSES } from '../lib/review.js';
+import { judgeMove, threatNow, planNow } from '../lib/coachEngine.js';
+import { WalkPanel, walkBoard, makeWalk } from '../ui/LineWalk.jsx';
+import { uciToSan as sanOf } from '../lib/chessutil.js';
+import { ClsDot } from '../ui/kit.jsx';
 import { go, href } from '../lib/router.js';
 
 const CUR = 'chess.current.v2';
@@ -34,12 +38,13 @@ export default function Play({ route }) {
 function PlaySetup({ query }) {
   const [prefs, setPrefs] = usePrefs();
   const [botId, setBotId] = useState(prefs.lastBot || 'b1400');
-  const [color, setColor] = useState(prefs.lastColor || 'w');
+  const [color, setColor] = useState(['w', 'b'].includes(query.color) ? query.color : prefs.lastColor || 'w');
+  useEffect(() => { if (query.coach) setPrefs({ playCoach: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = load(CUR, null);
   const fromFen = query.fen && validFen(query.fen) ? query.fen : null;
   const start = () => {
     const you = color === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : color;
-    setPrefs({ lastBot: botId, lastColor: color });
+    setPrefs(fromFen ? { lastBot: botId } : { lastBot: botId, lastColor: color });
     save(CUR, { id: newId(), botId, you, startFen: fromFen || START, uci: [], hints: 0, takebacks: 0, over: null });
     go('/play/game');
   };
@@ -91,6 +96,7 @@ function PlaySetup({ query }) {
           </div>
           <div>
             <div className="h-sec mb-1">Assists</div>
+            <Toggle on={prefs.playCoach} onChange={(v) => setPrefs({ playCoach: v })} label="Coach" sub="Explains each of your moves, warns you about threats, and suggests plans." />
             <Toggle on={prefs.playHints} onChange={(v) => setPrefs({ playHints: v })} label="Hints" sub="A hint button: the piece first, then the move." />
             <Toggle on={prefs.playThreats} onChange={(v) => setPrefs({ playThreats: v })} label="Threat arrows" sub="Red arrows at your pieces that are hanging." />
             <Toggle on={prefs.playGuard} onChange={(v) => setPrefs({ playGuard: v })} label="Blunder check" sub="Asks before you play a move that throws the game away." />
@@ -158,6 +164,12 @@ function PlayGame() {
   const [pending, setPending] = useState(null); // blunder check: { uci, before, after }
   const [flip, setFlip] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [coachCard, setCoachCard] = useState(null);
+  const [threat, setThreat] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [coachArrows, setCoachArrows] = useState(true);
+  const [walk, setWalk] = useState(null);
+  const [walkI, setWalkI] = useState(0);
   const token = useRef(0);
   const guardEval = useRef({});
   const stage = useStage({ evalBar: prefs.playEval });
@@ -223,10 +235,26 @@ function PlayGame() {
 
   // blunder check: evaluate your position in the background while you think
   useEffect(() => {
-    if (!prefs.playGuard || !yourTurn) return;
+    if (!(prefs.playGuard || prefs.playCoach) || !yourTurn) return;
     const f = fen;
-    engine.search({ fen: f, movetime: 1200, tag: 'guard', preempt: true, stops: ['eval'] }).then(r => { if (r?.lines?.[0]) guardEval.current = { fen: f, line: r.lines[0] }; });
-  }, [fen, yourTurn, prefs.playGuard]);
+    engine.search({ fen: f, movetime: 1200, multipv: 2, tag: 'guard', preempt: true, stops: ['eval'] }).then(r => { if (r?.lines?.length >= 2 && !r.stopped) guardEval.current = { fen: f, res: r }; });
+  }, [fen, yourTurn, prefs.playGuard, prefs.playCoach]);
+
+  // coach: after the bot moves, is there a threat?
+  useEffect(() => {
+    if (!prefs.playCoach || !yourTurn || !nav.live || moves.length === 0) return undefined;
+    let alive = true;
+    const f = fen;
+    threatNow(f).then(t => { if (alive && fenRef.current === f) setThreat(t); });
+    return () => { alive = false; };
+  }, [fen, yourTurn, prefs.playCoach]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function askPlan() {
+    const f = fen;
+    setPlan('busy');
+    const p = await planNow(f, cur.you);
+    if (fenRef.current === f) setPlan(p);
+  }
 
   useEffect(() => { setHint(null); }, [fen]);
 
@@ -246,29 +274,23 @@ function PlayGame() {
       save(CUR, n);
       return n;
     });
-    if (prefs.playGuard && !c.isGameOver()) {
+    const moveNo = `${fen.split(' ')[5]}${cur.you === 'w' ? '.' : '…'} ${m.san}`;
+    setThreat(null); setPlan(null);
+    if ((prefs.playGuard || prefs.playCoach) && !c.isGameOver()) {
       setPending({ uci, checking: true });
-      let before = guardEval.current.fen === fen ? guardEval.current.line : null;
-      if (!before) {
-        const r0 = await engine.search({ fen, movetime: 500, tag: 'guard', preempt: true, stops: ['eval'] });
-        before = r0?.lines?.[0] || null;
-      }
+      const before = guardEval.current.fen === fen ? guardEval.current.res : null;
+      const j = await judgeMove(fen, uci, before, 600);
       if (epoch.current !== ep) return true;
-      const r = await engine.search({ fen: c.fen(), movetime: 500, tag: 'guard', preempt: true, stops: ['eval'] });
-      if (epoch.current !== ep) return true;
-      const after = r?.lines?.[0];
-      const sgn = cur.you === 'w' ? 1 : -1;
-      if (before && after) {
-        const wb = winPct(sgn * cpOf(before)), wa = winPct(sgn * cpOf(after));
-        if (wb - wa >= 18 && wa < 60) { setPending({ uci, checking: false, wb, wa }); return true; }
-      }
+      if (prefs.playCoach && j) { setCoachCard({ ...j, moveNo, fen }); setWalk(null); }
+      if (prefs.playGuard && j && j.wBefore - j.wAfter >= 18 && j.wAfter < 60) { setPending({ uci, checking: false, wb: j.wBefore, wa: j.wAfter }); return true; }
       setPending(null);
-    }
+    } else setCoachCard(null);
     commit();
     return true;
   }
 
   function takeback() {
+    if (pending) { epoch.current++; setPending(null); setCoachCard(null); return; } // just drop the move being checked
     if (!cur || cur.uci.length === 0) return;
     epoch.current++;
     token.current++;
@@ -282,6 +304,7 @@ function PlayGame() {
     u.pop();
     while (u.length && turnAfter(u.length) !== cur.you) u.pop();
     update({ uci: u, takebacks: (cur.takebacks || 0) + 1, over: null });
+    setCoachCard(null); setThreat(null); setPlan(null);
     nav.setView(null);
   }
 
@@ -306,12 +329,19 @@ function PlayGame() {
   const orientation = (cur.you === 'w') !== flip ? 'white' : 'black';
   const topColor = orientation === 'white' ? 'b' : 'w';
   const shownFen = fens[nav.ply];
+  const shownFenIs = (f) => shownFen === f;
   const lm = nav.ply > 0 ? moves[nav.ply - 1] : null;
   const opening = openingOf(fens.slice(0, nav.ply + 1));
   const arrows = [];
   if (nav.live && yourTurn && prefs.playThreats) arrows.push(...threatArrows(fen));
   if (hint?.level === 2 && nav.live) arrows.push({ from: hint.uci.slice(0, 2), to: hint.uci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   const marks = hint?.level >= 1 && nav.live ? { [hint.uci.slice(0, 2)]: 'rgba(16,185,129,.5)' } : {};
+  const circles = [];
+  if (prefs.playCoach && coachArrows) {
+    if (nav.live && threat) arrows.push(...threat.arrows);
+    else if (nav.live && plan && plan !== 'busy') { arrows.push(...plan.arrows); circles.push(...plan.circles); }
+    if (coachCard && shownFenIs(coachCard.fen) && coachCard.bestUci && !['best', 'great', 'excellent', 'brilliant'].includes(coachCard.cls)) arrows.push({ from: coachCard.bestUci.slice(0, 2), to: coachCard.bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
+  }
   const botLabel = bot.max ? 'Max' : String(bot.elo);
   const strip = (color) => color === cur.you
     ? <PlayerStrip icon="🙂" name="You" color={color} fen={shownFen} active={yourTurn && nav.live} />
@@ -326,9 +356,10 @@ function PlayGame() {
       bottom={strip(topColor === 'w' ? 'b' : 'w')}
       evalBar={prefs.playEval ? <EvalBar height={stage.size} orientation={orientation} line={live.lines[0]} result={nav.live && over ? over.result : null} /> : null}
       board={
+        walk ? <Board fen={walkBoard(walk, walkI).fen} orientation={orientation} size={stage.size} lastMove={walkBoard(walk, walkI).lastMove} arrows={walkBoard(walk, walkI).arrows} dim={false} /> : (
         <Board fen={shownFen} orientation={orientation} size={stage.size}
           movable={nav.live && yourTurn ? cur.you : 'none'} onMove={onMove}
-          lastMove={lm} arrows={arrows} marks={marks} />
+          lastMove={lm} arrows={arrows} marks={marks} circles={circles} />)
       }
     >
       <div className="panel p-3.5 flex items-center gap-3" style={stage.portrait ? { order: 10 } : undefined}>
@@ -356,9 +387,50 @@ function PlayGame() {
           <div className="font-semibold text-white">Are you sure?</div>
           <div className="text-sm text-ink-200 mt-0.5">That move drops your winning chances from {Math.round(pending.wb)}% to {Math.round(pending.wa)}%.</div>
           <div className="grid grid-cols-2 gap-2 mt-3">
-            <button className="btn btn-primary" onClick={() => setPending(null)}>Take it back</button>
+            <button className="btn btn-primary" onClick={() => { epoch.current++; setPending(null); setCoachCard(null); setWalk(null); }}>Take it back</button>
             <button className="btn" onClick={() => { const u = pending.uci; setPending(null); if (cur.uci.length === moves.length - 1) update({ uci: [...cur.uci, u] }); }}>Play it</button>
           </div>
+        </div>
+      )}
+
+      {prefs.playCoach && !over && (
+        <div className="panel panel-pad space-y-2" style={stage.portrait ? { order: 4 } : undefined}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="h-sec">Coach</span>
+            <button className="btn btn-sm" onClick={askPlan} disabled={!yourTurn || plan === 'busy'}>{plan === 'busy' ? <Spinner size={12} /> : null}What's the plan?</button>
+          </div>
+          {pending?.checking && <div className="text-sm text-ink-300 flex items-center gap-2"><Spinner size={12} /> Looking at your move…</div>}
+          {threat && (
+            <div className="verdict v-warn !py-2.5 fade-up">
+              <div className="text-sm font-semibold text-white">Watch out</div>
+              <p className="text-sm text-ink-200">{threat.text}</p>
+            </div>
+          )}
+          {walk && <WalkPanel walk={walk} i={walkI} setI={setWalkI} onClose={() => setWalk(null)} />}
+          {coachCard && !pending?.checking && !walk && (
+            <div className="fade-up" key={coachCard.moveNo}>
+              <div className="flex items-center gap-2">
+                <ClsDot cls={coachCard.cls} size={18} />
+                <span className="text-sm font-semibold text-white">{coachCard.moveNo}</span>
+                <span className="text-sm font-semibold" style={{ color: CLASSES[coachCard.cls]?.color }}>{CLASSES[coachCard.cls]?.label}</span>
+              </div>
+              {coachCard.explanation.points.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1">{t}</p>)}
+              {!['best', 'great', 'excellent', 'brilliant', 'good'].includes(coachCard.cls) && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {coachCard.bestLine?.length > 0 && <button className="btn btn-sm btn-primary" onClick={() => { setWalk(makeWalk({ title: `Better was ${coachCard.explanation.points.length ? '' : ''}${sanOf(coachCard.fen, coachCard.bestUci)}`, fen: coachCard.fen, pv: coachCard.bestLine, you: cur.you, score: coachCard.bestScore })); setWalkI(0); }}>Step through the better move</button>}
+                  {coachCard.afterLine?.length > 0 && <button className="btn btn-sm" onClick={() => { const g = new Chess(coachCard.fen); g.move({ from: coachCard.uci.slice(0, 2), to: coachCard.uci.slice(2, 4), promotion: coachCard.uci[4] }); setWalk(makeWalk({ title: `Why ${coachCard.san} goes wrong`, fen: g.fen(), pv: coachCard.afterLine, you: cur.you, score: coachCard.afterScore, prevUci: coachCard.uci })); setWalkI(0); }}>Why it goes wrong</button>}
+                </div>
+              )}
+            </div>
+          )}
+          {plan && plan !== 'busy' && (
+            <div className="verdict v-info !py-2.5 fade-up">
+              <div className="text-sm font-semibold text-white">Plan ideas</div>
+              <ul className="mt-1 space-y-1">{plan.ideas.map((i, k) => <li key={k} className="text-sm text-ink-200"><b className="text-white">{i.title}.</b> {i.text}</li>)}</ul>
+            </div>
+          )}
+          {!coachCard && !threat && !plan && !pending?.checking && <p className="text-sm text-ink-300">Play a move and I'll say what I think of it. I'll also warn you about threats.</p>}
+          {(threat || (plan && plan !== 'busy')) && <Toggle on={coachArrows} onChange={setCoachArrows} label="Draw it on the board" />}
         </div>
       )}
 
@@ -380,7 +452,7 @@ function PlayGame() {
               {hint?.level === 0 ? <Spinner size={14} /> : null}{hint?.level >= 1 ? 'Show move' : 'Hint'}
             </button>
           ) : <span />}
-          <button className="btn" onClick={takeback} disabled={cur.uci.length === 0}>Takeback</button>
+          <button className="btn" onClick={takeback} disabled={cur.uci.length === 0 && !pending}>Takeback</button>
           <button className="btn btn-danger" onClick={() => setConfirm('resign')} disabled={cur.uci.length < 1}>Resign</button>
         </div>
       )}
@@ -388,6 +460,7 @@ function PlayGame() {
       <details className="disc" style={stage.portrait ? { order: 11 } : undefined}>
         <summary>Assists</summary>
         <div className="body">
+          <Toggle on={prefs.playCoach} onChange={(v) => setPrefs({ playCoach: v })} label="Coach" />
           <Toggle on={prefs.playEval} onChange={(v) => setPrefs({ playEval: v })} label="Eval bar" />
           <Toggle on={prefs.playThreats} onChange={(v) => setPrefs({ playThreats: v })} label="Threat arrows" />
           <Toggle on={prefs.playGuard} onChange={(v) => setPrefs({ playGuard: v })} label="Blunder check" />

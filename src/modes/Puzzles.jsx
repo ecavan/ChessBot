@@ -9,7 +9,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
-import { Stage, useStage, Seg, Spinner, Stat, MoveList } from '../ui/kit.jsx';
+import { Stage, useStage, Seg, Spinner, Stat, MoveList, Toggle } from '../ui/kit.jsx';
+import { engine } from '../engine/engine.js';
 import { pick, daily, record, progress, dueReviews, today, themeName, THEME_GROUPS, loadIndex } from '../lib/puzzles.js';
 import { playUci, uciOf } from '../lib/chessutil.js';
 import { moveSound, sfx } from '../lib/sound.js';
@@ -174,10 +175,39 @@ function Solver({ mode, theme, id }) {
     setFailed(true);
   }
 
+  /** Stockfish plays the other side's move in the scratch pad, after the line `ucis`. */
+  function engineAnswers(ucis) {
+    const f = playUci(lineFens[k], ucis).game.fen();
+    setSandbox(s => ({ ...s, thinking: true }));
+    engine.search({ fen: f, movetime: 700, tag: 'coach' }).then(r => {
+      setSandbox(s => {
+        if (!s || s.uci.join() !== ucis.join()) return s ? { ...s, thinking: false } : s;
+        if (!r?.bestmove) return { ...s, thinking: false };
+        const h = new Chess(f);
+        try { const mm = h.move({ from: r.bestmove.slice(0, 2), to: r.bestmove.slice(2, 4), promotion: r.bestmove[4] }); moveSound(mm, h.inCheck()); } catch { return { ...s, thinking: false }; }
+        return { ...s, uci: [...s.uci, r.bestmove], thinking: false };
+      });
+    });
+  }
+  function undoSandbox() {
+    setSandbox(s => {
+      let u = s.uci.slice(0, -1);
+      // with Stockfish answering, go back to a position where it's your move
+      if (s.reply) while (u.length && playUci(lineFens[k], u).game.turn() !== you) u = u.slice(0, -1);
+      return { ...s, uci: u };
+    });
+  }
+
   function onMove({ from, to, promotion }) {
     if (sandbox) {
       const c = new Chess(displayFen);
-      try { const m = c.move({ from, to, promotion }); moveSound(m, c.inCheck()); setSandbox(s => ({ uci: [...s.uci, uciOf(m)] })); return true; } catch { return false; }
+      let m;
+      try { m = c.move({ from, to, promotion }); } catch { return false; }
+      moveSound(m, c.inCheck());
+      const nextUci = [...sandbox.uci, uciOf(m)];
+      setSandbox(s => ({ ...s, uci: nextUci }));
+      if (sandbox.reply && !c.isGameOver()) engineAnswers(nextUci);
+      return true;
     }
     if (status !== 'play') return false;
     const at = inVisual ? visualTarget : k;
@@ -263,7 +293,7 @@ function Solver({ mode, theme, id }) {
         {sandbox && <span className="tag !bg-sky-950 !border-sky-700 !text-sky-200">Scratch pad</span>}</div>}
       board={p ? (
         <Board fen={displayFen} logicFen={logicFen} orientation={you === 'w' ? 'white' : 'black'} size={stage.size}
-          movable={sandbox ? 'both' : status === 'play' ? you : 'none'} onMove={onMove} hideDots={inVisual}
+          movable={sandbox ? (sandbox.reply ? (sandbox.thinking ? 'none' : you) : 'both') : status === 'play' ? you : 'none'} onMove={onMove} hideDots={inVisual}
           lastMove={inVisual ? lineMoves[0] : lm} arrows={arrows} marks={marks}
           onSelect={(s) => setReach(s)}
           reachOf={sandbox && reach ? { squares: reachSquares(displayFen, reach), color: 'rgba(56,189,248,.28)' } : null} />
@@ -279,9 +309,11 @@ function Solver({ mode, theme, id }) {
         {!p ? <div className="text-ink-300 text-sm flex items-center gap-2"><Spinner /> Finding a puzzle…</div> : sandbox ? (
           <div className="verdict v-info">
             <div className="font-semibold text-white">Scratch pad</div>
-            <div className="text-sm text-ink-200 mt-0.5">Move both sides to test a line. Tap a piece to see what it controls. Nothing here counts.</div>
+            <div className="text-sm text-ink-200 mt-0.5">{sandbox.reply ? 'Make your move; Stockfish answers with the best reply. Keep going as long as you like.' : 'Move both sides to test a line. Tap a piece to see what it controls.'} Nothing here counts.</div>
+            <div className="mt-2"><Toggle on={!!sandbox.reply} onChange={(v) => { setSandbox(s => ({ ...s, reply: v })); const g = playUci(lineFens[k], sandbox.uci).game; if (v && g.turn() !== you && !g.isGameOver()) engineAnswers(sandbox.uci); }} label="Stockfish answers my moves" /></div>
+            {sandbox.thinking && <div className="text-xs text-ink-300 flex items-center gap-2 mt-1"><Spinner size={12} /> Stockfish is answering…</div>}
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <button className="btn" onClick={() => setSandbox(s => ({ uci: s.uci.slice(0, -1) }))} disabled={!sandbox.uci.length}>Undo</button>
+              <button className="btn" onClick={undoSandbox} disabled={!sandbox.uci.length || sandbox.thinking}>Undo</button>
               <button className="btn btn-primary" onClick={() => { setSandbox(null); setReach(null); }}>Back to puzzle</button>
             </div>
             {sandbox.uci.length > 0 && <div className="mt-3"><MoveList sans={playUci(lineFens[k], sandbox.uci).moves.map(m => m.san)} ply={sandbox.uci.length} startFen={lineFens[k]} maxHeight={150} /></div>}
@@ -322,7 +354,7 @@ function Solver({ mode, theme, id }) {
             <>
               <button className="btn" onClick={takeHint} disabled={status !== 'play' || hint >= 2}>{hint === 0 ? 'Hint' : 'Show move'}</button>
               <button className="btn" onClick={showSolution} disabled={status !== 'play'}>Solution</button>
-              <button className="btn col-span-2" onClick={() => { setSandbox({ uci: [] }); setReach(null); }} disabled={status !== 'play' || inVisual}>Scratch pad: try a line first</button>
+              <button className="btn col-span-2" onClick={() => { setSandbox({ uci: [], reply: true }); setReach(null); }} disabled={status !== 'play' || inVisual}>Scratch pad: try a line first</button>
               {visual && inVisual && <button className="btn col-span-2" onClick={() => { fail(); setShown(true); setK(visualTarget); }}>Peek at the position</button>}
             </>
           )}

@@ -1,5 +1,6 @@
 /** Home: where you left off, today's puzzle, your numbers. */
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { loadCourses, loadCourse, courseStats } from '../lib/repertoire.js';
 import { load } from '../lib/store.js';
 import { progress, dueReviews, today } from '../lib/puzzles.js';
 import { allGames, subscribeGames } from '../lib/games.js';
@@ -9,6 +10,14 @@ import { GameRow } from './Review.jsx';
 
 export default function Home() {
   const games = useSyncExternalStore(subscribeGames, allGames);
+  const [reps, setReps] = useState(null);
+  useEffect(() => {
+    loadCourses().then(async (ix) => {
+      let due = 0, learned = 0;
+      for (const c of ix) { try { const st = courseStats(await loadCourse(c.id)); due += st.due; learned += st.learned; } catch { /* skip */ } }
+      setReps({ due, learned });
+    }).catch(() => {});
+  }, []);
   const cur = load('chess.current.v2', null);
   const inGame = cur && !cur.over && cur.uci.length > 0;
   const pr = progress();
@@ -48,10 +57,10 @@ export default function Home() {
           <div className="text-white font-semibold mt-1">Calculate on a board</div>
           <div className="text-sm text-ink-300 mt-1">Move pieces, see what they hit, grade your lines.</div>
         </a>
-        <a href={href('/puzzles/solve', { mode: 'visual' })} className="card-link">
-          <div className="h-sec !text-sky-300">Visualize</div>
-          <div className="text-white font-semibold mt-1">See it without moving it</div>
-          <div className="text-sm text-ink-300 mt-1">Puzzles where the first moves happen only in your head.</div>
+        <a href="#/train" className="card-link">
+          <div className="h-sec !text-sky-300">Openings</div>
+          <div className="text-white font-semibold mt-1">{reps == null ? 'Your repertoire' : reps.due ? `${reps.due} line${reps.due > 1 ? 's' : ''} to review` : reps.learned ? `${reps.learned} lines learned` : 'Learn your openings'}</div>
+          <div className="text-sm text-ink-300 mt-1">Every reply people really play against you, drilled until you know it.</div>
         </a>
         <a href="#/review/import" className="card-link">
           <div className="h-sec">Import</div>

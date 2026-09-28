@@ -9,6 +9,8 @@ import { clearGames, allGames } from '../lib/games.js';
 import { resetPuzzles } from '../lib/puzzles.js';
 import { KEYS, load, save } from '../lib/store.js';
 import Board from '../ui/Board.jsx';
+import { engine } from '../engine/engine.js';
+import { Spinner } from '../ui/kit.jsx';
 
 export default function Settings() {
   const [prefs, setPrefs] = usePrefs();
@@ -85,6 +87,7 @@ export default function Settings() {
           {st.error && <span className="text-rose-300"> {st.error}</span>}
         </div>
         <Seg value={prefs.engine} onChange={(v) => setPrefs({ engine: v })} options={[['full', 'Full strength'], ['lite', 'Lite (small download)']]} />
+        <EngineCheck />
         <p className="text-xs text-ink-400">
           Full is Stockfish 17.1 with its complete neural network, the engine the big sites use for their analysis;
           {canThread() ? ' it uses several cores here.' : ' this browser only allows one thread.'} The app starts on the lite network and switches automatically
@@ -127,6 +130,52 @@ export default function Settings() {
           <button className="btn btn-danger" onClick={() => { if (confirm === 'games') clearGames(); else resetPuzzles(); setConfirm(null); }}>Yes, delete</button>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+/** Run a 3-second search and report how strong this device's engine is, and whether it works offline. */
+function EngineCheck() {
+  const [res, setRes] = useState(null);
+  const [cache, setCache] = useState(null);
+  async function run() {
+    setRes('busy');
+    const fen = 'r1bq1rk1/pp2bppp/2n1pn2/3p4/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ - 0 8';
+    const r = await engine.search({ fen, movetime: 3000, tag: 'bench', preempt: true });
+    const l = r?.lines?.[0];
+    setRes(l ? { depth: l.depth, nps: l.nps, flavor: r.flavor } : { error: 'The engine did not answer.' });
+    try {
+      const names = await caches.keys();
+      let parts = 0, lite = false;
+      for (const n of names) {
+        const c = await caches.open(n);
+        for (const req of await c.keys()) {
+          if (/8e4d048-part-\d\.wasm|single-a496a04-part-\d\.wasm/.test(req.url)) parts++;
+          if (/lite.*\.wasm/.test(req.url)) lite = true;
+        }
+      }
+      const persisted = await navigator.storage?.persisted?.();
+      setCache({ parts, lite, persisted });
+    } catch { setCache({ unknown: true }); }
+  }
+  return (
+    <div className="rounded-xl border border-ink-700/70 bg-ink-850 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-white">Engine check</span>
+        <button className="btn btn-sm" onClick={run} disabled={res === 'busy'}>{res === 'busy' ? <Spinner size={12} /> : null}Run a 3-second test</button>
+      </div>
+      {res && res !== 'busy' && (res.error ? <p className="text-sm text-rose-300">{res.error}</p> : (
+        <p className="text-sm text-ink-200">
+          Reached depth <b className="text-white">{res.depth}</b> at <b className="text-white">{res.nps ? `${(res.nps / 1e6).toFixed(2)} M` : '?'}</b> positions/second on the {res.flavor?.startsWith('full') ? 'full' : 'lite'} network.
+          {' '}{res.depth >= 22 ? 'That is strong: well beyond any human.' : res.depth >= 18 ? 'Good: stronger than any human in a few seconds.' : 'On the slow side; reviews will use shallower searches.'}
+        </p>
+      ))}
+      {cache && !cache.unknown && (
+        <p className="text-xs text-ink-300">
+          Offline: {cache.parts >= 6 ? 'the full network is saved on this device.' : cache.parts ? `${cache.parts} of 6 parts of the full network saved so far.` : 'the full network is not saved yet (it downloads the first time the app runs online).'}
+          {cache.persisted ? ' Storage is marked persistent.' : ' The browser may clear it if the device runs short of space; opening the app now and then keeps it.'}
+        </p>
+      )}
     </div>
   );
 }

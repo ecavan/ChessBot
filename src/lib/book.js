@@ -20,3 +20,9 @@ export function openingOf(fens) {
   }
   return found;
 }
+
+/** Name of the opening at exactly this position, if it has one. */
+export function nameOf(fen) {
+  const e = book?.[posKey(fen)];
+  return e ? { eco: e[0], name: e[1] } : null;
+}

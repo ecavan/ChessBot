@@ -12,6 +12,8 @@ import { analyzeGame, classified } from '../lib/analyze.js';
 import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
+import { explainMove } from '../lib/coach.js';
+import { WalkPanel, walkBoard, makeWalk } from '../ui/LineWalk.jsx';
 import { engine } from '../engine/engine.js';
 import { useLiveEval } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
@@ -188,6 +190,9 @@ function GameReview({ id, auto }) {
   const [prog, setProg] = useState(null); // { done, total }
   const [engineOn, setEngineOn] = useState(false);
   const [retry, setRetry] = useState(null); // { list: [moveIdx], i, status, tried }
+  const [walk, setWalk] = useState(null);
+  const [walkI, setWalkI] = useState(0);
+  const startWalk = (w) => { setWalk(makeWalk(w)); setWalkI(0); };
   const [confirmDel, setConfirmDel] = useState(false);
   const [copied, setCopied] = useState(false);
   const [bookOk, setBookOk] = useState(bookReady());
@@ -214,13 +219,14 @@ function GameReview({ id, auto }) {
   const jump = (p) => setPly(Math.max(0, Math.min(len, p)));
   useEffect(() => {
     const k = (e) => {
-      if (e.target.closest?.('input,textarea') || retry) return;
+      if (e.target.closest?.('input,textarea') || retry || walk) return;
       if (e.key === 'ArrowLeft') setPly(p => Math.max(0, (p ?? 0) - 1));
       if (e.key === 'ArrowRight') setPly(p => Math.min(len, (p ?? 0) + 1));
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
-  }, [len, retry]);
+  }, [len, retry, walk]);
+  useEffect(() => { setWalk(null); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const retryFen = retry ? rep.fens[retry.list[retry.i]] : null;
   const live = useLiveEval(retry ? retryFen : rep?.fens[cur], { on: engineOn && !prog, multipv: 3, movetime: 6000, tag: 'eval' });
@@ -248,6 +254,7 @@ function GameReview({ id, auto }) {
   const bad = c && ['inaccuracy', 'mistake', 'blunder', 'miss'].includes(c.cls);
   const arrows = [];
   if (!retry && bad && c.bestUci) arrows.push({ from: c.bestUci.slice(0, 2), to: c.bestUci.slice(2, 4), color: 'rgba(16,185,129,.8)' });
+  if (!retry && bad && c.afterLine?.[0]) arrows.push({ from: c.afterLine[0].slice(0, 2), to: c.afterLine[0].slice(2, 4), color: 'rgba(244,63,94,.75)' });
   if (engineOn && live.lines[0]?.pv?.[0] && !retry) { const u = live.lines[0].pv[0]; arrows.push({ from: u.slice(0, 2), to: u.slice(2, 4), color: 'rgba(56,189,248,.8)' }); }
   const keyMoments = cls ? cls.cls.map((x, i) => ({ ...x, i })).filter(x => (!game.you || moverOf(x.i) === game.you) && ['blunder', 'mistake', 'miss', 'brilliant', 'great'].includes(x.cls)) : [];
   const retryable = cls ? cls.cls.map((x, i) => ({ ...x, i })).filter(x => (!game.you || moverOf(x.i) === game.you) && ['blunder', 'mistake', 'miss'].includes(x.cls)).map(x => x.i) : [];
@@ -281,6 +288,7 @@ function GameReview({ id, auto }) {
 
   const boardFen = retry ? (retry.tried?.fen ? retry.tried.fen : fens[retryIdx]) : fens[cur];
   const boardLast = retry ? (retry.tried ? { from: retry.tried.uci.slice(0, 2), to: retry.tried.uci.slice(2, 4) } : retryIdx > 0 ? moves[retryIdx - 1] : null) : mv;
+  const wb = walk ? walkBoard(walk, walkI) : null;
   const retryArrows = retry?.showBest ? [{ from: cls.cls[retryIdx].bestUci.slice(0, 2), to: cls.cls[retryIdx].bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' }] : [];
 
   return (
@@ -289,13 +297,14 @@ function GameReview({ id, auto }) {
       bottom={<Strip game={game} color={orientation === 'white' ? 'w' : 'b'} sum={sum} />}
       evalBar={<EvalBar height={stage.size} orientation={orientation} line={engineOn && live.lines[0] ? live.lines[0] : posLine(retry ? retryIdx : cur)} />}
       board={
+        wb ? <Board fen={wb.fen} orientation={orientation} size={stage.size} lastMove={wb.lastMove} arrows={wb.arrows} /> : (
         <Board fen={boardFen} orientation={orientation} size={stage.size}
           movable={retry && retry.status === 'play' ? moverOf(retryIdx) : 'none'} onMove={onRetryMove}
           lastMove={boardLast} arrows={retry ? retryArrows : arrows}
-          badge={!retry && c && mv ? { sq: mv.to, cls: c.cls } : null} />
+          badge={!retry && c && mv ? { sq: mv.to, cls: c.cls } : null} />)
       }
     >
-      {prog ? (
+      {walk ? <WalkPanel walk={walk} i={walkI} setI={setWalkI} onClose={() => setWalk(null)} /> : prog ? (
         <div className="panel panel-pad space-y-2">
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Stockfish is reviewing the game</span><span className="num text-ink-300">{prog.done}/{prog.total}</span></div>
           <Progress value={(prog.done / prog.total) * 100} />
@@ -321,9 +330,18 @@ function GameReview({ id, auto }) {
                 <span className="text-sm font-semibold" style={{ color: CLASSES[c.cls].color }}>{CLASSES[c.cls].label}</span>
                 <span className="ml-auto text-sm num text-ink-200">{fmtScore(posLine(cur))}</span>
               </div>
-              <p className="text-sm text-ink-200 mt-1.5">{explain(c, mv, fens[cur - 1], bestSan, moverOf(cur - 1))}</p>
+              {(() => {
+                const ex = explainMove(fens[cur - 1], uciOf(mv), { cls: c.cls, drop: c.drop, bestUci: c.bestUci, bestLine: c.bestLine, afterLine: c.afterLine, ply: cur - 1 });
+                const pts = ex.points.length ? ex.points : [explain(c, mv, fens[cur - 1], bestSan, moverOf(cur - 1))];
+                return pts.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
+              })()}
               {bad && c.bestLine?.length > 0 && <p className="text-xs text-ink-300 mt-1.5"><span className="text-emerald-300 font-semibold">Best line</span> {lineSan(fens[cur - 1], c.bestLine, 8)}</p>}
               {bad && c.afterLine?.length > 0 && <p className="text-xs text-ink-300 mt-1"><span className="text-rose-300 font-semibold">After {mv.san}</span> {lineSan(fens[cur], c.afterLine, 6)}</p>}
+              <div className="flex flex-wrap gap-2 mt-3">
+                {bad && c.bestLine?.length > 0 && <button className="btn btn-sm btn-primary" onClick={() => startWalk({ title: `The better move: ${bestSan}`, fen: fens[cur - 1], pv: c.bestLine, you: moverOf(cur - 1), score: game.review.positions[cur - 1]?.lines?.[0], prevUci: cur > 1 ? uciOf(moves[cur - 2]) : null })}>Show best line, step by step</button>}
+                {bad && c.afterLine?.length > 0 && <button className="btn btn-sm" onClick={() => startWalk({ title: `Why ${mv.san} goes wrong`, fen: fens[cur], pv: c.afterLine, you: moverOf(cur - 1), score: game.review.positions[cur]?.lines?.[0], prevUci: uciOf(mv) })}>Why {mv.san} goes wrong</button>}
+                {!bad && c.afterLine?.length > 0 && <button className="btn btn-sm" onClick={() => startWalk({ title: 'How the game should continue', fen: fens[cur], pv: c.afterLine, you: game.you || moverOf(cur - 1), score: game.review.positions[cur]?.lines?.[0], prevUci: uciOf(mv) })}>Show the engine's line from here</button>}
+              </div>
             </div>
           )}
           {cur === 0 && keyMoments.length > 0 && (
@@ -352,7 +370,7 @@ function GameReview({ id, auto }) {
           {engineOn && live.lines.length > 0 && (
             <div className="panel p-2.5 space-y-1">
               {live.lines.map((l, i) => (
-                <div key={i} className="text-xs text-ink-200 flex gap-2"><b className="num text-white w-12 shrink-0">{fmtScore(l)}</b><span className="truncate">{lineSan(fens[cur], l.pv, 8)}</span></div>
+                <button key={i} className="text-xs text-ink-200 flex gap-2 w-full text-left hover:text-white" onClick={() => startWalk({ title: `Engine line ${i + 1}`, fen: fens[cur], pv: l.pv, you: game.you || (fens[cur].split(' ')[1]), score: l })}><b className="num text-white w-12 shrink-0">{fmtScore(l)}</b><span className="truncate">{lineSan(fens[cur], l.pv, 8)}</span><span className="ml-auto text-emerald-300 shrink-0">step ▸</span></button>
               ))}
               <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}</div>
             </div>

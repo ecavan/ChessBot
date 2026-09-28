@@ -32,7 +32,7 @@ export const botById = (id) => BOTS.find(b => b.id === id) || BOTS[5];
 /**
  * The bot's move for `fen` (UCI). thinkMs: how long a limited bot thinks (full strength uses more).
  */
-export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 'guard'] } = {}) {
+export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 'guard', 'coach'] } = {}) {
   if (bot.max) {
     const r = await engine.search({ fen, movetime: 2500, tag, stops });
     return r?.bestmove || null;

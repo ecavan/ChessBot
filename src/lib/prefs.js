@@ -14,6 +14,7 @@ export const DEFAULT_PREFS = {
   playThreats: false,
   playGuard: false,
   playHints: true,
+  playCoach: true,
   chesscom: '',
   lichess: '',
   puzzleDifficulty: 0, // −300 easier … +300 harder
