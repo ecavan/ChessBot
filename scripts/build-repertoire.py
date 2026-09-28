@@ -163,6 +163,7 @@ def build(course):
     nodes = 0
 
     def rel(seq): return ' '.join(seq[len(course['root']):])
+    chosen = {}
 
     def grow(board, seq, extend=0):
         nonlocal nodes
@@ -195,13 +196,18 @@ def build(course):
                     refl = analyse(b2)
                     trap = dict(s=pop, u=pm.uci(), share=round(cnt[pop] / tot, 3), ref=refl[0]['pv'][:6] if refl else [], drop=beste - mover_pov(pe['e'], board.turn))
             choice = best['u']
+            key = ' '.join(board.fen().split(' ')[:4])
             if use_data and forced:
                 choice = board.parse_san(forced).uci()
+            elif key in chosen:
+                # same position reached by another move order: always the same answer
+                choice = chosen[key]
             elif use_data:
                 for m in cands:
                     x = got.get(m.uci())
                     if x and mover_pov(x['e'], board.turn) >= beste - 25:
                         choice = m.uci(); break
+            chosen.setdefault(key, choice)
             m = chess.Move.from_uci(choice)
             san = board.san(m)
             me = got.get(choice) or analyse(board, [m])[0]

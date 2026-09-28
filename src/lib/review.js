@@ -163,7 +163,7 @@ export function phaseOf(fen, ply) {
     if ('nbrq'.includes(t)) mat += VALUE[t];
     if (t === 'q') queens++;
   }
-  if (ply < 20) return 'opening';
   if (mat <= 26 || (queens === 0 && mat <= 30)) return 'endgame';
+  if (ply < 20) return 'opening';
   return 'middlegame';
 }

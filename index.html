@@ -11,6 +11,14 @@
     <meta name="apple-mobile-web-app-title" content="Chess" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
+    <script>
+      // set the theme before the first paint (no dark/light flash)
+      try {
+        var t = (JSON.parse(localStorage.getItem('chess.prefs.v2') || '{}').theme) || 'system';
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.dataset.theme = t;
+      } catch (e) { /* default dark */ }
+    </script>
   </head>
   <body>
     <div id="root"></div>

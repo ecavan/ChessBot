@@ -42,6 +42,10 @@ export default function Settings() {
       <h1 className="h-title">Settings</h1>
 
       <section className="panel panel-pad">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div><div className="h-sec">Appearance</div><div className="text-sm text-ink-300 mt-1">Light, dark, or follow the iPad's setting.</div></div>
+          <Seg value={prefs.theme} onChange={(v) => setPrefs({ theme: v })} options={[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]} />
+        </div>
         <div className="h-sec mb-3">Board</div>
         <div className="grid md:grid-cols-[1fr_220px] gap-5 items-start">
           <div className="space-y-4">
@@ -117,11 +121,11 @@ export default function Settings() {
           <label className="btn cursor-pointer">Restore backup<input type="file" accept="application/json" className="hidden" onChange={importData} /></label>
           <button className="btn btn-danger" onClick={() => setConfirm('puzzles')}>Reset puzzle progress</button>
           <button className="btn btn-danger" onClick={() => setConfirm('games')}>Delete all games</button>
-          <button className="btn btn-quiet" onClick={() => setPrefs(DEFAULT_PREFS)}>Default settings</button>
+          <button className="btn btn-quiet" onClick={() => setPrefs({ ...DEFAULT_PREFS, chesscom: prefs.chesscom, lichess: prefs.lichess })}>Default settings</button>
         </div>
         {msg && <p className="text-sm text-rose-300">{msg}</p>}
       </section>
-      <p className="text-xs text-ink-500 text-center">Stockfish 17.1 (GPLv3) · puzzles and opening names from the Lichess open database (CC0)</p>
+      <p className="text-xs text-ink-400 text-center">Stockfish 17.1 (GPLv3) · puzzles and opening names from the Lichess open database (CC0)</p>
 
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title={confirm === 'games' ? 'Delete every saved game?' : 'Reset puzzle ratings and history?'}>
         <p className="text-sm text-ink-300 mb-4">This can't be undone. Export a backup first if you might want it.</p>

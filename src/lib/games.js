@@ -21,12 +21,29 @@ export const subscribeGames = (f) => { subs.add(f); return () => subs.delete(f);
 export const allGames = () => games;
 export const getGame = (id) => games.find(g => g.id === id);
 
+const CAP = 2000;
+// what to let go first when space runs out: old imported games nobody reviewed
+const expendable = (g) => (g.review?.summary ? 2 : 0) + (g.source === 'bot' ? 1 : 0);
+function trim(list) {
+  if (list.length <= CAP) return list;
+  const order = [...list].sort((a, b) => expendable(a) - expendable(b) || a.at - b.at);
+  const drop = new Set(order.slice(0, list.length - CAP).map(g => g.id));
+  return list.filter(g => !drop.has(g.id));
+}
 function persist() {
-  games = games.slice(0, 400);
+  games = trim(games);
   let ok = save(KEYS.games, games);
-  // out of room: drop the stored reviews of the oldest games until it fits
-  for (let i = games.length - 1; !ok && i >= 0; i--) {
-    if (games[i].review) { games[i] = { ...games[i], review: undefined }; ok = save(KEYS.games, games); }
+  // out of room (about 5 MB per site): drop unreviewed imports, oldest first, then old reviews
+  while (!ok) {
+    const order = [...games].sort((a, b) => expendable(a) - expendable(b) || a.at - b.at);
+    const victim = order.find(g => !g.review?.summary && g.source !== 'bot');
+    if (victim) games = games.filter(g => g !== victim);
+    else {
+      const withReview = [...games].reverse().find(g => g.review);
+      if (!withReview) break;
+      games = games.map(g => (g === withReview ? { ...g, review: undefined } : g));
+    }
+    ok = save(KEYS.games, games);
   }
   emit();
   return ok;
@@ -69,7 +86,7 @@ function fromPgn(text, source, me = []) {
   const link = headers.Link || (headers.Site?.startsWith('http') ? headers.Site : null);
   return {
     id: link ? `u:${link}` : `p:${hash(moves.map(uciOf).join(' ') + white + black + d)}`,
-    source, at, date: (headers.Date || today()), white, black,
+    source, at, date: headers.Date && !headers.Date.includes('?') ? headers.Date : (headers.UTCDate && !headers.UTCDate.includes('?') ? headers.UTCDate : ''), white, black,
     whiteElo: headers.WhiteElo ? Number(headers.WhiteElo) || undefined : undefined,
     blackElo: headers.BlackElo ? Number(headers.BlackElo) || undefined : undefined,
     result: headers.Result || '*', how, you, startFen,
@@ -99,7 +116,9 @@ export function importPgnText(text, source = 'import', me = []) {
   }
   games.sort((a, b) => b.at - a.at);
   persist();
-  return { added, skipped, errors, games: out };
+  const kept = new Set(games.map(g => g.id));
+  const stayed = out.filter(g => kept.has(g.id));
+  return { added: stayed.length, dropped: out.length - stayed.length, skipped, errors, games: stayed };
 }
 
 /** Recent games from chess.com's public API (no login needed). */

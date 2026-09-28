@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { load, save, KEYS } from './store.js';
 
 export const DEFAULT_PREFS = {
+  theme: 'system', // 'system' | 'dark' | 'light'
   boardTheme: 'green',
   pieceStyle: 'classic',
   coords: true,

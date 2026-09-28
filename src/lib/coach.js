@@ -236,6 +236,7 @@ export function pawnWeaknesses(fen, color) {
 /** What a move does, concretely: attacks, defends, aims at f7, prepares a break, opens a bishop. */
 export function moveIdeas(fen, m, after) {
   const out = [];
+  if (m.promotion) out.push(m.promotion === 'q' ? 'Promotes to a new queen.' : `Promotes to a ${NAME[m.promotion]} instead of a queen${m.san.includes('+') ? ', with check' : ''}.`);
   const me = m.color, them = other(me);
   const pos0 = parse(fen), pos1 = parse(after);
   // aims at the f7/f2 weak spot while their king is still near it
@@ -359,20 +360,22 @@ export function explainMove(fen, uci, ctx = {}) {
     else if (why) points.push(`After this, ${why} (${lineText(after, ref, 5)})`);
     if (ref[0]) arrows.push({ from: ref[0].slice(0, 2), to: ref[0].slice(2, 4), color: 'rgba(244,63,94,.85)' });
   }
+  const better = [];
   if (bad && ctx.bestUci && ctx.bestUci !== uci) {
     const bestWhy = motifOf(fen, ctx.bestUci);
     const gain = ctx.bestLine?.length ? lineGain(fen, ctx.bestLine, me) : { gain: 0 };
-    if (bestWhy && /checkmate/.test(bestWhy)) points.push(`${ctx.cls === 'miss' ? 'You missed' : 'You had'} ${bestSan}, checkmate!`);
-    else if (bestWhy && (gain.gain >= 1 || /forks|pins|skewers|uncovers/.test(bestWhy))) points.push(`${ctx.cls === 'miss' ? 'You missed' : 'Better was'} ${bestSan}: ${bestWhy.replace(/^[^ ]+ /, '')}`);
+    if (bestWhy && /checkmate/.test(bestWhy)) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'You had'} ${bestSan}, checkmate!`);
+    else if (bestWhy && (gain.gain >= 1 || /forks|pins|skewers|uncovers/.test(bestWhy))) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'Better was'} ${bestSan}: ${bestWhy.replace(/^[^ ]+ /, '')}`);
     else if (big) {
       const bp = tryMove(fen, ctx.bestUci);
       const bpr = bp ? principles(fen, bp.m, bp.g.fen(), ply) : { good: [] };
-      points.push(`Better was ${bestSan}${bpr.good[0] ? `: ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : '.'}`);
+      better.push(`Better was ${bestSan}${bpr.good[0] ? `: ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : '.'}`);
     }
     arrows.push({ from: ctx.bestUci.slice(0, 2), to: ctx.bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   }
   // rules of thumb: the bad ones matter when the move was worse, the good ones when it was fine
-  if (bad) points.push(...pr.bad.slice(0, 2));
+  // your move's own problem first, then what was better (so neither reads as describing the other)
+  if (bad) { points.push(...pr.bad.slice(0, points.length ? 1 : 2).map(t => `Your move: ${t.charAt(0).toLowerCase()}${t.slice(1)}`)); points.push(...better); }
   else {
     const t = motifOf(fen, uci, ctx.prevUci);
     if (t && /forks|pins|skewers|uncovers|undefended|wins material|checkmate|takes back/.test(t)) points.push(t);

@@ -101,7 +101,7 @@ export function WalkPanel({ walk, i, setI, onClose }) {
       </div>
       <div className="flex flex-wrap gap-1">
         {walk.steps.map((st, k) => (
-          <button key={k} onClick={() => setI(k + 1)} className={`px-2 py-1 rounded-md text-sm font-semibold ${k + 1 === i ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/60' : k + 1 < i ? 'text-ink-100' : 'text-ink-500'}`}>
+          <button key={k} onClick={() => setI(k + 1)} className={`px-2 py-1 rounded-md text-sm font-semibold ${k + 1 === i ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/60' : k + 1 < i ? 'text-ink-100' : 'text-ink-400'}`}>
             {st.move.color === 'w' || k === 0 ? `${moveNo(st)} ` : ''}{st.move.san}
           </button>
         ))}

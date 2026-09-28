@@ -13,7 +13,7 @@ import { explainMove, motifOf, lineGain } from '../lib/coach.js';
 import { loadBook, nameOf } from '../lib/book.js';
 import { moveSound, sfx } from '../lib/sound.js';
 import { href, go } from '../lib/router.js';
-import { uciOf } from '../lib/chessutil.js';
+import { uciOf, lineSan, START } from '../lib/chessutil.js';
 
 const worth = (g) => (g >= 8 ? 'the queen' : g >= 4.5 ? 'a rook' : g >= 2.5 ? 'a piece' : g >= 1.5 ? 'two pawns' : 'a pawn');
 
@@ -64,7 +64,8 @@ function trapNote(course, node) {
   try { g.move({ from: t.u.slice(0, 2), to: t.u.slice(2, 4), promotion: t.u[4] }); after = g.fen(); } catch { return null; }
   const why = t.ref?.[0] ? motifOf(after, t.ref[0]) : null;
   const gain = t.ref?.length ? lineGain(after, t.ref, parent.fen.split(' ')[1] === 'w' ? 'b' : 'w') : null;
-  return `${t.s} is what ${Math.round(t.share * 100)}% of players at your level play here, and it's a mistake.${why ? ` After ${t.s}, ${why}` : ''}${gain && gain.gain >= 1 ? ` It costs ${worth(gain.gain)}.` : ''}`;
+  const line = t.ref?.length ? lineSan(after, t.ref, 6) : '';
+  return `${t.s} is what ${Math.round(t.share * 100)}% of players at your level play here, and it's a mistake.${why ? ` After ${t.s}, ${why}` : ''}${gain && gain.gain >= 1 ? ` It costs ${worth(gain.gain)}.` : ''}${line ? ` The refutation: ${line}.` : ''} Play ${node.san} instead.`;
 }
 
 export default function Course({ id, mode: initMode }) {
@@ -175,7 +176,7 @@ function Explore({ course, header }) {
           <a className="btn btn-primary btn-sm" href={href('/play', { fen: node.fen, color: course.color, coach: 1 })}>Play it out with the coach</a>
         </div>
       )}
-      <div className="panel p-2"><MoveList sans={path.map(p => course.nodes[p].san)} ply={path.length} startFen={course.rootFen} onJump={(p) => setCur(p === 0 ? 'root' : path[p - 1])} maxHeight={120} /></div>
+      <div className="panel p-2"><MoveList sans={[...course.root, ...path.map(p => course.nodes[p].san)]} ply={course.root.length + path.length} startFen={START} onJump={(p) => setCur(p <= course.root.length ? 'root' : path[p - course.root.length - 1])} maxHeight={120} /></div>
       <div className="grid grid-cols-3 gap-2">
         <button className="btn" onClick={() => setCur('root')} disabled={cur === 'root'}>Start</button>
         <button className="btn" onClick={() => setCur(node.parent)} disabled={!node.parent}>◀ Back</button>
@@ -299,7 +300,7 @@ function Drill({ course, header, learn = false, onDone }) {
           </>
         )}
       </div>
-      <div className="panel p-2"><MoveList sans={line.slice(0, step).map(p => course.nodes[p].san)} ply={step} startFen={course.rootFen} maxHeight={120} /></div>
+      <div className="panel p-2"><MoveList sans={[...course.root, ...line.slice(0, step).map(p => course.nodes[p].san)]} ply={course.root.length + step} startFen={START} maxHeight={120} /></div>
       {!done && <div className="grid grid-cols-2 gap-2">
         <button className="btn" onClick={() => { setStep(0); setSlip(null); }}>Restart line</button>
         <button className="btn" onClick={nextOne}>Skip</button>

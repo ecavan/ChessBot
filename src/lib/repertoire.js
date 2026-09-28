@@ -23,6 +23,8 @@ export async function loadCourses() {
 /** Load a course and flatten it: nodes[id] = { id, parent, san, uci, fen (after), mine, n, p, e, tags, trap, kids: [id] }. */
 export async function loadCourse(id) {
   if (courses.has(id)) return courses.get(id);
+  const ix = await loadCourses();
+  if (!ix.some(c => c.id === id)) throw new Error('There is no course with that name.');
   const r = await fetch(`/data/rep/${id}.json`);
   if (!r.ok) throw new Error('Course not found.');
   const c = await r.json();

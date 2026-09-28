@@ -44,7 +44,8 @@ export default function Insights() {
       c.cls.forEach((x, i) => {
         const mover = (i % 2 === 0) === (first === 'w') ? 'w' : 'b';
         if (mover !== g.you) return;
-        const ph = phaseOf(c.fens[i], i);
+        const [, side, , , , full] = c.fens[i].split(' ');
+        const ph = phaseOf(c.fens[i], (Number(full) - 1) * 2 + (side === 'b' ? 1 : 0));
         phase[ph].acc += x.acc; phase[ph].n++;
         if (x.cls === 'blunder') { blunders++; phase[ph].bad++; }
         if (x.cls === 'mistake' || x.cls === 'miss') { mistakes++; phase[ph].bad++; }
@@ -177,7 +178,7 @@ function TrendChart({ values }) {
   const y = (v) => H - (v / 100) * H;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: H }}>
-      {[50, 75, 90].map(v => <line key={v} x1="0" x2={W} y1={y(v)} y2={y(v)} stroke="#2a3442" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />)}
+      {[50, 75, 90].map(v => <line key={v} x1="0" x2={W} y1={y(v)} y2={y(v)} stroke="rgb(var(--ink-600))" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />)}
       <polyline points={values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       {values.map((v, i) => <line key={i} x1={x(i)} x2={x(i)} y1={y(v) - 0.5} y2={y(v) + 0.5} stroke="#34d399" strokeWidth="7" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
     </svg>

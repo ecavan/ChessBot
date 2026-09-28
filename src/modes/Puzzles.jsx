@@ -388,7 +388,7 @@ function StatusCard({ status, p, delta, failed, hint, mode, you }) {
   return (
     <div>
       <div className="text-lg font-semibold text-white">{status === 'wait' ? '…' : `Find the best move for ${you === 'w' ? 'White' : 'Black'}`}</div>
-      <div className="text-sm text-ink-300 mt-0.5">{failed ? 'This one counts as a miss now, but finish it.' : hint ? 'Hint used.' : 'Tap a piece to see its moves.'}</div>
+      <div className="text-sm text-ink-300 mt-0.5">{failed ? 'This one counts as a miss now, but finish it.' : hint ? 'Hint used.' : mode === 'visual' ? 'No dots here: that would give the position away.' : 'Tap a piece to see its moves.'}</div>
     </div>
   );
 }

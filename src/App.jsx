@@ -24,6 +24,17 @@ export default function App() {
   const route = useRoute();
   const [prefs] = usePrefs();
   useEffect(() => { engine.start(prefs.engine); loadBook(); try { navigator.storage?.persist?.(); } catch { /* not supported */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: light)');
+    const apply = () => {
+      const t = prefs.theme === 'system' ? (mq?.matches ? 'light' : 'dark') : prefs.theme;
+      document.documentElement.dataset.theme = t;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'light' ? '#ffffff' : '#07090d');
+    };
+    apply();
+    mq?.addEventListener?.('change', apply);
+    return () => mq?.removeEventListener?.('change', apply);
+  }, [prefs.theme]);
   const firstPref = useRef(true);
   useEffect(() => { if (firstPref.current) { firstPref.current = false; return; } engine.setPref(prefs.engine); }, [prefs.engine]);
   const sec = route.parts[0] || '';
@@ -41,7 +52,7 @@ export default function App() {
       <header className="topbar">
         <div className="flex items-center justify-between gap-3 px-4 sm:px-5 h-[52px] md:h-14 max-w-[1500px] mx-auto">
           <a href="#/" className="flex items-center gap-2.5 shrink-0">
-            <span className="w-8 h-8 rounded-lg bg-emerald-500 text-ink-950 flex items-center justify-center text-lg font-black">♞</span>
+            <img src="/icon.svg" alt="" className="w-8 h-8 rounded-[9px] shadow-card" />
             <span className="font-semibold text-white tracking-tight hidden sm:block">Chess Trainer</span>
           </a>
           <nav className="tabbar-top">

@@ -54,7 +54,7 @@ export function material(fen) {
   return s;
 }
 
-/** Captured pieces for display: { w: ['p','n'], b: [...] } = pieces each side has taken. */
+/** Material edge for display: { w: ['p','n'], b: [...] } = the extra pieces each side has, type by type. */
 export function captured(fen) {
   const start = { p: 8, n: 2, b: 2, r: 2, q: 1 };
   const have = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
@@ -63,8 +63,10 @@ export function captured(fen) {
     if (!(t in start)) continue;
     have[ch === ch.toUpperCase() ? 'w' : 'b'][t]++;
   }
-  const took = (by, of) => Object.entries(start).flatMap(([t, n]) => Array(Math.max(0, n - have[of][t])).fill(t));
-  return { w: took('w', 'b'), b: took('b', 'w') };
+  // net difference per piece type (as Lichess shows it): trades cancel out, and a set-up position
+  // with fewer pieces doesn't show a row of 'captured' pieces nobody took
+  const net = (me, them) => Object.keys(start).flatMap(t => Array(Math.max(0, have[me][t] - have[them][t])).fill(t));
+  return { w: net('w', 'b'), b: net('b', 'w') };
 }
 
 /** Build PGN text from headers and SAN moves. */

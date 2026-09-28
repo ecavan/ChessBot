@@ -39,6 +39,7 @@ const SRC = { bot: 'vs bot', watch: 'bots', import: 'PGN', chesscom: 'chess.com'
 function GameList() {
   const games = useGames();
   const [filter, setFilter] = useState('all');
+  const [shown, setShown] = useState(60);
   const list = games.filter(g => filter === 'all' || (filter === 'here' ? g.source === 'bot' : filter === 'imported' ? ['import', 'chesscom', 'lichess'].includes(g.source) : g.source === 'watch'));
   const pending = games.filter(g => g.you && !g.review?.summary).length;
   return (
@@ -61,9 +62,10 @@ function GameList() {
         </div>
       ) : (
         <div className="panel p-2 divide-y divide-ink-800">
-          {list.slice(0, 200).map(g => <GameRow key={g.id} g={g} />)}
+          {list.slice(0, shown).map(g => <GameRow key={g.id} g={g} />)}
         </div>
       )}
+      {list.length > shown && <button className="btn btn-block" onClick={() => setShown(n => n + 100)}>Show more ({list.length - shown} older)</button>}
       {pending > 0 && <p className="text-xs text-ink-400">{pending} of your games haven't been reviewed yet. Open one, or analyze them all from Insights.</p>}
     </div>
   );
@@ -82,7 +84,7 @@ export function GameRow({ g }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-white truncate">{g.you ? `vs ${opp}` : opp}</span>
-        <span className="block text-xs text-ink-300 truncate">{g.date?.replace(/\./g, '-')} · {SRC[g.source] || g.source} · {Math.ceil(g.uci.length / 2)} moves{op ? ` · ${op}` : ''}</span>
+        <span className="block text-xs text-ink-300 truncate">{g.date ? `${g.date.replace(/\./g, '-')} · ` : ''}{SRC[g.source] || g.source} · {Math.ceil(g.uci.length / 2)} moves{op ? ` · ${op}` : ''}</span>
       </span>
       {yourAcc != null ? <span className="text-right shrink-0"><span className="block text-base font-semibold text-white num">{yourAcc.toFixed(1)}</span><span className="block text-[10px] uppercase tracking-wider text-ink-400">accuracy</span></span>
         : g.review && !g.review.summary ? <span className="tag">partly</span> : <span className="tag">new</span>}
@@ -100,7 +102,7 @@ function Import() {
   const [added, setAdded] = useState([]);
   const [months, setMonths] = useState(1);
   const done = (r, where) => {
-    setMsg({ ok: true, text: `${r.added} game${r.added === 1 ? '' : 's'} added${r.skipped ? `, ${r.skipped} already here` : ''}${where ? ` from ${where}` : ''}.${r.errors?.length ? ` ${r.errors.length} couldn't be read.` : ''}` });
+    setMsg({ ok: true, text: `${r.added} game${r.added === 1 ? '' : 's'} added${r.skipped ? `, ${r.skipped} already here` : ''}${where ? ` from ${where}` : ''}.${r.dropped ? ` ${r.dropped} older ones didn't fit on this device.` : ''}${r.errors?.length ? ` ${r.errors.length} couldn't be read.` : ''}` });
     setAdded(r.games || []);
   };
   async function run(kind) {
@@ -304,6 +306,7 @@ function GameReview({ id, auto }) {
           badge={!retry && c && mv ? { sq: mv.to, cls: c.cls } : null} />)
       }
     >
+      {stage.portrait && !retry && !walk && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
       {walk ? <WalkPanel walk={walk} i={walkI} setI={setWalkI} onClose={() => setWalk(null)} /> : prog ? (
         <div className="panel panel-pad space-y-2">
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Stockfish is reviewing the game</span><span className="num text-ink-300">{prog.done}/{prog.total}</span></div>
@@ -375,7 +378,7 @@ function GameReview({ id, auto }) {
               <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}</div>
             </div>
           )}
-          <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />
+          {!stage.portrait && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
           <div className="grid grid-cols-3 gap-2">
             <button className={`btn ${engineOn ? 'on' : ''}`} onClick={() => setEngineOn(v => !v)} disabled={!!prog}>Engine</button>
             <a className="btn" href={href('/train/scratch', { fen: fens[cur] })}>Explore</a>

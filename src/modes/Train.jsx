@@ -60,7 +60,16 @@ function Hub() {
     );
   };
   const white = (courses || []).filter(c => c.color === 'w'), black = (courses || []).filter(c => c.color === 'b');
-  const MATES = [['mateIn2', 'Mate in 2'], ['mateIn3', 'Mate in 3'], ['backRankMate', 'Back-rank mate'], ['smotheredMate', 'Smothered mate'], ['arabianMate', 'Arabian mate'], ['anastasiaMate', 'Anastasia mate'], ['hookMate', 'Hook mate'], ['doubleBishopMate', 'Two bishops mate']];
+  const MATES = [
+    ['mateIn1', 'Mate in 1', 'Warm up: spot the finish in one move.'],
+    ['mateIn2', 'Mate in 2', 'A check or a quiet move, then mate. The most useful to drill.'],
+    ['mateIn3', 'Mate in 3', 'Longer forcing lines: checks first, then captures.'],
+    ['backRankMate', 'Back-rank mate', 'The king trapped behind its own pawns.'],
+    ['smotheredMate', 'Smothered mate', 'A knight mates a king boxed in by its own pieces.'],
+    ['arabianMate', 'Arabian mate', 'Rook and knight in the corner.'],
+    ['anastasiaMate', 'Anastasia mate', 'Knight and rook against a king on the edge.'],
+    ['hookMate', 'Hook mate', 'Rook, knight and pawn working together.'],
+  ];
   return (
     <div className="page fade-up space-y-7">
       <div>
@@ -95,26 +104,36 @@ function Hub() {
       </section>
 
       <section>
-        <div className="h-sec mb-3">Checkmate patterns</div>
-        <div className="flex flex-wrap gap-2">{MATES.map(([t, n]) => <a key={t} className="btn btn-sm" href={href('/puzzles/solve', { mode: 'theme', theme: t })}>{n}</a>)}</div>
+        <div className="h-sec mb-1">Checkmates</div>
+        <p className="text-sm text-ink-300 mb-3">Real puzzles from the puzzle set, filtered to one pattern. They count toward your puzzle rating.</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {MATES.map(([t, n, d]) => (
+            <a key={t} className="card-link !p-4" href={href('/puzzles/solve', { mode: 'theme', theme: t })}>
+              <div className="font-semibold text-white">{n}</div>
+              <div className="text-xs text-ink-300 mt-1 leading-relaxed">{d}</div>
+            </a>
+          ))}
+        </div>
       </section>
 
-      <details className="disc">
-        <summary>Endgame basics</summary>
-        <div className="body">
-          <div className="grid sm:grid-cols-2 gap-2">
-            {Object.entries(ENDGAMES).map(([k, e]) => {
-              const p = st.endgames?.[k];
-              return (
-                <a key={k} href={`#/train/endgames/${k}`} className="row-link border border-ink-700/60">
-                  <span className="flex-1 min-w-0"><span className="block text-sm font-semibold text-white">{e.name}</span><span className="block text-xs text-ink-300 truncate">{e.description}</span></span>
-                  {p?.best ? <span className="tag !text-emerald-300">✓ {p.best}</span> : <span className="tag">{e.difficulty}</span>}
-                </a>
-              );
-            })}
-          </div>
+      <section>
+        <div className="h-sec mb-1">Endgames</div>
+        <p className="text-sm text-ink-300 mb-3">Win these against full-strength Stockfish. The basics every player needs.</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Object.entries(ENDGAMES).map(([k, e]) => {
+            const p = st.endgames?.[k];
+            return (
+              <a key={k} href={`#/train/endgames/${k}`} className="card-link !p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white">{e.name}</span>
+                  {p?.best ? <span className="tag !text-emerald-300">✓ {p.best} moves</span> : <span className="tag">{e.difficulty}</span>}
+                </div>
+                <div className="text-xs text-ink-300 mt-1">{e.description}</div>
+              </a>
+            );
+          })}
         </div>
-      </details>
+      </section>
     </div>
   );
 }
@@ -170,7 +189,9 @@ function ScratchPad({ initFen }) {
   useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; engine.cancel(['cand', 'coach']); }; }, []);
 
   const { fens, moves } = useMemo(() => {
-    const g = new Chess(base);
+    let g;
+    try { g = new Chess(base); } catch { return { fens: [base], moves: [] }; } // an edited position can be illegal for a while
+    if (!validFen(base)) return { fens: [base], moves: [] };
     const f = [g.fen()], m = [];
     for (const u of line) { try { m.push(g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] })); f.push(g.fen()); } catch { break; } }
     return { fens: f, moves: m };
@@ -304,6 +325,7 @@ function ScratchPad({ initFen }) {
       <div className="panel panel-pad space-y-3">
         <Seg value={mode} onChange={setMode2} options={[['play', 'Play moves'], ['free', 'Move pieces freely']]} className="w-full [&>button]:flex-1" />
         {err && <div className="text-sm text-rose-300">{err}</div>}
+        {mode === 'free' && !validFen(fen) && <div className="text-sm text-amber-300">Not a legal position yet: each side needs exactly one king, and the side that just moved can't be in check.</div>}
         {mode === 'free' && (
           <div className="space-y-2">
             <div className="grid grid-cols-7 gap-1">
@@ -349,8 +371,8 @@ function ScratchPad({ initFen }) {
           <MoveList sans={moves.map(m => m.san)} ply={ply} onJump={setPly} startFen={base} className="flex-1" maxHeight={stage.portrait ? 180 : undefined} />
         </div>
       )}
-      {mode === 'play' && <NavButtons ply={ply} len={moves.length} jump={(p) => setPly(Math.max(0, Math.min(moves.length, p)))}
-        extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
+      {mode === 'play' && <div style={stage.portrait ? { order: -1 } : undefined}><NavButtons ply={ply} len={moves.length} jump={(p) => setPly(Math.max(0, Math.min(moves.length, p)))}
+        extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} /></div>}
 
       <div className="panel panel-pad">
         <div className="h-sec mb-1">See</div>
@@ -379,7 +401,7 @@ function ScratchPad({ initFen }) {
               {cands.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <button className="flex-1 text-left text-ink-100 hover:text-white truncate" onClick={() => { setBase(c.base); setLine(c.uci); setPly(c.uci.length); }}>{c.text}</button>
-                  <span className="num font-semibold w-16 text-right">{c.score ? <span className={c.score.cp > 50 || c.score.mate > 0 ? 'text-emerald-300' : c.score.cp < -50 || c.score.mate < 0 ? 'text-rose-300' : 'text-ink-100'}>{c.score.text}</span> : <span className="text-ink-500">?</span>}</span>
+                  <span className="num font-semibold w-16 text-right">{c.score ? <span className={c.score.cp > 50 || c.score.mate > 0 ? 'text-emerald-300' : c.score.cp < -50 || c.score.mate < 0 ? 'text-rose-300' : 'text-ink-100'}>{c.score.text}</span> : <span className="text-ink-400">?</span>}</span>
                   <button className="text-ink-400 hover:text-rose-300 px-1" onClick={() => setCands(cs => cs.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
                 </div>
               ))}
@@ -402,7 +424,7 @@ function ScratchPad({ initFen }) {
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-sm" onClick={() => navigator.clipboard?.writeText(fen)}>Copy FEN</button>
             <button className="btn btn-sm" onClick={() => { setBase(START); setLine([]); setPly(0); }}>Reset to start</button>
-            <a className="btn btn-sm" href={href('/play', { fen })} onClick={(e) => { if (!validFen(fen)) { e.preventDefault(); setErr('Not a legal position to play from.'); } }}>Play this vs a bot</a>
+            <a className="btn btn-sm" href={href('/play', { fen, color: fen.split(' ')[1] })} onClick={(e) => { if (!validFen(fen)) { e.preventDefault(); setErr('Not a legal position to play from.'); } }}>Play this vs a bot</a>
           </div>
         </div>
       </details>
@@ -491,8 +513,8 @@ function EndgameDrill({ id }) {
     if (over) return;
     const promoted = moves.some(m => m.color === you && m.promotion);
     if (game.isCheckmate()) end(game.turn() !== you, game.turn() !== you ? `Checkmate in ${yourMoves} moves.` : 'You got mated.');
-    else if (game.isDraw()) end(false, game.isStalemate() ? 'Stalemate! The king had no moves. Leave it a square.' : 'Draw.');
     else if (e.goal === 'promotion' && promoted) end(true, `Promoted in ${yourMoves} moves.`);
+    else if (game.isDraw()) end(false, game.isStalemate() ? 'Stalemate! The king had no moves. Leave it a square.' : 'Draw.');
     else if (yourMoves > (e.maxMoves || 50) && turn === you) end(false, `Out of moves (limit ${e.maxMoves}).`);
   }, [fen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -519,7 +541,7 @@ function EndgameDrill({ id }) {
       try { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); moveSound(m, g.inCheck()); } catch { return; }
       setLine(l => [...l, u]);
     });
-    return () => { token.current++; engine.cancel(['bot']); };
+    return () => { token.current++; setThinking(false); engine.cancel(['bot']); };
   }, [fen, over]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setHint(null), [fen]);

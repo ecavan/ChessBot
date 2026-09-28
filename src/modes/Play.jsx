@@ -80,7 +80,7 @@ function PlaySetup({ query }) {
                   <span className="text-2xl">{b.icon}</span>
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-white truncate">{b.name}</div>
-                    <div className="text-xs font-bold num" style={{ color: b.max ? '#34d399' : '#fcd34d' }}>{b.max ? 'Max strength' : b.elo}</div>
+                    <div className={`text-xs font-bold num ${b.max ? 'text-emerald-300' : 'text-amber-300'}`}>{b.max ? 'Max strength' : b.elo}</div>
                   </div>
                 </div>
                 <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
@@ -216,7 +216,7 @@ function PlayGame() {
 
   // the bot moves
   useEffect(() => {
-    if (!cur || over || pending || turn === cur.you) return undefined;
+    if (!cur || over || pending || walk || turn === cur.you) return undefined; // the bot waits while you step through a line
     const my = ++token.current;
     setThinking(true);
     botMove(bot, fen).then((uci) => {
@@ -231,7 +231,7 @@ function PlayGame() {
       nav.setView(null);
     });
     return () => { if (my === token.current) { token.current++; setThinking(false); engine.cancel(['bot']); } };
-  }, [fen, over, pending]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fen, over, pending, !!walk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // blunder check: evaluate your position in the background while you think
   useEffect(() => {
