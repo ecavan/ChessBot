@@ -1,158 +1,84 @@
-import { useState, useCallback } from 'react';
-import { useStockfish } from './engine/useStockfish';
-import { usePreferences } from './hooks/usePreferences';
-import { BOARD_THEMES } from './data/boardThemes';
-import { PIECE_STYLE_NAMES } from './data/pieceStyles';
-import PlayMode from './modes/PlayMode';
-import OpeningSandbox from './modes/OpeningSandbox';
-import ReviewMode from './modes/ReviewMode';
-import EndgameTrainer from './modes/EndgameTrainer';
-import PuzzlesTrainer from './modes/PuzzlesTrainer';
-import WatchMode from './modes/WatchMode';
+import { useEffect, useRef } from 'react';
+import { useRoute, href } from './lib/router.js';
+import { usePrefs } from './lib/prefs.js';
+import { engine, FLAVOR_NAME } from './engine/engine.js';
+import { useEngineStatus } from './engine/useEngine.js';
+import { loadBook } from './lib/book.js';
+import { Spinner } from './ui/kit.jsx';
+import Home from './modes/Home.jsx';
+import Play from './modes/Play.jsx';
+import Puzzles from './modes/Puzzles.jsx';
+import Train from './modes/Train.jsx';
+import Review from './modes/Review.jsx';
+import Settings from './modes/Settings.jsx';
 
-const MODES = [
-  { key: 'play', label: 'Play' },
-  { key: 'openings', label: 'Openings' },
-  { key: 'endgames', label: 'Endgames' },
-  { key: 'puzzles', label: 'Puzzles' },
-  { key: 'review', label: 'Review' },
-  { key: 'watch', label: 'Watch' },
+const TABS = [
+  ['', 'Home', HomeIcon],
+  ['play', 'Play', PlayIcon],
+  ['puzzles', 'Puzzles', PuzzleIcon],
+  ['train', 'Train', TrainIcon],
+  ['review', 'Review', ReviewIcon],
 ];
 
-const THEME_KEYS = Object.keys(BOARD_THEMES);
-const PIECE_STYLE_KEYS = Object.keys(PIECE_STYLE_NAMES);
-
 export default function App() {
-  const engine = useStockfish();
-  const [activeMode, setActiveMode] = useState('play');
-  const [lastGamePgn, setLastGamePgn] = useState(null);
-  const [prefs, updatePrefs] = usePreferences();
-
-  const handleModeChange = useCallback((mode) => {
-    setActiveMode(mode);
-    engine.newGame();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.newGame]);
-
-  const handleGameEnd = useCallback((pgn) => {
-    setLastGamePgn(pgn);
-  }, []);
-
-  const handleReviewGame = useCallback((pgn) => {
-    setLastGamePgn(pgn);
-    setActiveMode('review');
-  }, []);
-
-  if (engine.engineError) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <p className="text-red-400 text-lg font-bold mb-2">Engine Failed to Load</p>
-          <p className="text-gray-400 text-sm">{engine.engineError}</p>
-          <p className="text-gray-500 text-xs mt-3">
-            Your browser may not support cross-origin isolation. Try Chrome, Safari 15.2+, or Firefox.
-          </p>
-        </div>
-      </div>
-    );
+  const route = useRoute();
+  const [prefs] = usePrefs();
+  useEffect(() => { engine.start(prefs.engine); loadBook(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const firstPref = useRef(true);
+  useEffect(() => { if (firstPref.current) { firstPref.current = false; return; } engine.setPref(prefs.engine); }, [prefs.engine]);
+  const sec = route.parts[0] || '';
+  let page;
+  switch (sec) {
+    case 'play': page = <Play route={route} />; break;
+    case 'puzzles': page = <Puzzles route={route} />; break;
+    case 'train': page = <Train route={route} />; break;
+    case 'review': page = <Review route={route} />; break;
+    case 'settings': page = <Settings />; break;
+    default: page = <Home />;
   }
-
-  if (!engine.isReady) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-400">Loading Stockfish engine...</p>
-          <p className="text-gray-600 text-xs mt-1">This may take a few seconds on first visit</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <nav className="flex items-center gap-4 p-4 bg-gray-800 border-b border-gray-700">
-        <h1 className="text-lg font-bold mr-4">Chess Trainer</h1>
-        {MODES.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => handleModeChange(key)}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              activeMode === key
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-
-        {/* Theme + Piece style pickers */}
-        <div className="ml-auto flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 mr-1">Board</span>
-            {THEME_KEYS.map((key) => {
-              const t = BOARD_THEMES[key];
-              const isActive = prefs.boardTheme === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => updatePrefs({ boardTheme: key })}
-                  title={t.name}
-                  className="transition-transform hover:scale-110"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 4,
-                    background: `linear-gradient(135deg, ${t.light} 50%, ${t.dark} 50%)`,
-                    border: isActive ? '2px solid #60a5fa' : '2px solid transparent',
-                    boxShadow: isActive ? '0 0 6px rgba(96,165,250,0.5)' : 'none',
-                  }}
-                />
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-500 mr-1">Pieces</span>
-            {PIECE_STYLE_KEYS.map((key) => {
-              const isActive = prefs.pieceStyle === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => updatePrefs({ pieceStyle: key })}
-                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-200'
-                  }`}
-                >
-                  {PIECE_STYLE_NAMES[key]}
-                </button>
-              );
-            })}
+    <div className="shell">
+      <header className="topbar">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 h-[52px] md:h-14 max-w-[1500px] mx-auto">
+          <a href="#/" className="flex items-center gap-2.5 shrink-0">
+            <span className="w-8 h-8 rounded-lg bg-emerald-500 text-ink-950 flex items-center justify-center text-lg font-black">♞</span>
+            <span className="font-semibold text-white tracking-tight hidden sm:block">Chess Trainer</span>
+          </a>
+          <nav className="tabbar-top">
+            {TABS.map(([k, label]) => <a key={k} href={`#/${k}`} className={sec === k ? 'on' : ''}>{label}</a>)}
+          </nav>
+          <div className="flex items-center gap-2">
+            <EnginePill />
+            <a href="#/settings" aria-label="Settings" className={`ibtn !w-10 !h-10 ${sec === 'settings' ? '!border-emerald-500' : ''}`}><GearIcon /></a>
           </div>
         </div>
+      </header>
+      <main className="flex-1" key={sec}>{page}</main>
+      <nav className="tabbar-bottom">
+        {TABS.map(([k, label, Icon]) => (
+          <a key={k} href={`#/${k}`} className={sec === k ? 'on' : ''}><Icon /><span>{label}</span></a>
+        ))}
       </nav>
-      <main className="p-6 flex justify-center">
-        {activeMode === 'play' && (
-          <PlayMode engine={engine} onGameEnd={handleGameEnd} onReviewGame={handleReviewGame} preferences={prefs} />
-        )}
-        {activeMode === 'openings' && (
-          <OpeningSandbox engine={engine} preferences={prefs} />
-        )}
-        {activeMode === 'endgames' && (
-          <EndgameTrainer engine={engine} preferences={prefs} />
-        )}
-        {activeMode === 'puzzles' && (
-          <PuzzlesTrainer preferences={prefs} />
-        )}
-        {activeMode === 'review' && (
-          <ReviewMode engine={engine} initialPgn={lastGamePgn} preferences={prefs} />
-        )}
-        {activeMode === 'watch' && (
-          <WatchMode engine={engine} preferences={prefs} />
-        )}
-      </main>
     </div>
   );
 }
+
+function EnginePill() {
+  const st = useEngineStatus();
+  const full = st.flavor?.startsWith('full');
+  return (
+    <a href={href('/settings')} className="pill !py-1.5 hidden sm:inline-flex" title={st.flavor ? FLAVOR_NAME[st.flavor] : 'Starting engine'}>
+      {st.loading ? <Spinner size={12} /> : <span className={`w-2 h-2 rounded-full ${st.error ? 'bg-rose-500' : full ? 'bg-emerald-400' : 'bg-amber-400'}`} />}
+      <span>SF 17.1</span>
+      <span className="text-ink-300 font-medium">{st.loading && !full ? 'loading full…' : full ? `full${st.threads > 1 ? ` · ${st.threads} threads` : ''}` : st.flavor ? 'lite' : '…'}</span>
+    </a>
+  );
+}
+
+const I = (d) => function Icon() { return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; };
+function HomeIcon() { return I(<><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></>)(); }
+function PlayIcon() { return I(<><path d="M9 20h6" /><path d="M10 20l-1-6h6l-1 6" /><path d="M12 4a3 3 0 110 6 3 3 0 010-6z" /></>)(); }
+function PuzzleIcon() { return I(<><path d="M4 8h4a2 2 0 114 0h4v4a2 2 0 110 4v4H4z" /></>)(); }
+function TrainIcon() { return I(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /></>)(); }
+function ReviewIcon() { return I(<><path d="M3 17l5-6 4 4 8-9" /><path d="M14 6h6v6" /></>)(); }
+function GearIcon() { return I(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" /></>)(); }

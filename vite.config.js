@@ -3,58 +3,46 @@ import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Cross-origin isolation lets Stockfish use several threads (SharedArrayBuffer).
+const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
+
 export default defineConfig({
-  server: {
-    headers: {},
-  },
+  server: { headers: ISOLATION },
+  preview: { headers: ISOLATION },
   plugins: [
     react(),
     viteStaticCopy({
-      targets: [
-        {
-          src: 'node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.js',
-          dest: 'stockfish'
-        },
-        {
-          src: 'node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.wasm',
-          dest: 'stockfish'
-        }
-      ]
+      targets: [{ src: 'node_modules/stockfish/src/stockfish-17.1-[!a]*', dest: 'stockfish' }],
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: [
-        'icon.svg',
-        'stockfish/stockfish-17.1-lite-single-03e3232.js',
-        'stockfish/stockfish-17.1-lite-single-03e3232.wasm',
-      ],
+      includeAssets: ['icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Chess Intuition Trainer',
-        short_name: 'Chess Trainer',
-        description: 'Practice chess openings, endgames, puzzles, and review your games — all offline.',
-        theme_color: '#16213e',
-        background_color: '#111827',
+        name: 'Chess Trainer',
+        short_name: 'Chess',
+        description: 'Play Stockfish, solve puzzles, train calculation and review your games. Works offline.',
+        theme_color: '#07090d',
+        background_color: '#07090d',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
         icons: [
-          {
-            src: 'icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any',
-          },
-          {
-            src: 'icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'maskable',
-          },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,wasm}'],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB for Stockfish WASM
+        // the app and the puzzle packs are precached; the engine networks (lite ~7 MB, full
+        // 6 × 13 MB) are cached the first time they load
+        globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
+        maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
+        runtimeCaching: [{
+          urlPattern: ({ url }) => url.pathname.startsWith('/stockfish/') && url.pathname.endsWith('.wasm'),
+          handler: 'CacheFirst',
+          options: { cacheName: 'stockfish-wasm', expiration: { maxEntries: 20 } },
+        }],
       },
     }),
   ],
