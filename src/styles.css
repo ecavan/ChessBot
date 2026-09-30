@@ -114,7 +114,7 @@
   .tabbar-top { @apply hidden md:flex items-center gap-1 p-1 rounded-xl bg-ink-900 border border-ink-700/70; }
   .tabbar-top a { @apply px-4 py-1.5 rounded-lg text-sm font-semibold text-ink-300 hover:text-white transition; }
   .tabbar-top a.on { @apply bg-ink-700 text-white; }
-  .tabbar-bottom { @apply md:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-ink-700 bg-ink-950/95 backdrop-blur;
+  .tabbar-bottom { @apply md:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-6 border-t border-ink-700 bg-ink-950/95 backdrop-blur;
     padding-bottom: env(safe-area-inset-bottom); }
   .tabbar-bottom a { @apply flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold text-ink-300; }
   .tabbar-bottom a.on { @apply text-emerald-400; }

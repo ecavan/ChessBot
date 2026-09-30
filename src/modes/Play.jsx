@@ -1,5 +1,5 @@
 /**
- * Play: you vs a bot from the ladder (or full Stockfish), with optional assists; Watch: bot vs bot.
+ * Play: you vs a bot from the ladder (or full Stockfish), with optional assists. (Bot vs bot is Watch.jsx.)
  * The game in progress survives a reload. Finished games are saved for Review.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,9 +29,12 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 export default function Play({ route }) {
   const sub = route.parts[1];
   if (sub === 'game') return <PlayGame />;
-  if (sub === 'watch') return <Watch />;
+  if (sub === 'watch') return <ToWatch />;
   return <PlaySetup query={route.query} />;
 }
+
+// the old address of Watch
+function ToWatch() { useEffect(() => { go('/watch'); }, []); return null; }
 
 // ------------------------------------------------------------------ setup
 
@@ -56,7 +59,7 @@ function PlaySetup({ query }) {
           <h1 className="h-title">Play</h1>
           <p className="muted mt-1">{fromFen ? 'Play this position out against a bot.' : 'Pick an opponent. Every game is saved for review.'}</p>
         </div>
-        <a href={href('/play/watch')} className="btn">Watch bots play</a>
+        <a href={href('/watch')} className="btn">Watch bots play</a>
       </div>
 
       {inProgress && !fromFen && (
@@ -117,7 +120,7 @@ function PlaySetup({ query }) {
 
 // ------------------------------------------------------------------ the game
 
-function gameOverOf(c) {
+export function gameOverOf(c) {
   if (c.isCheckmate()) return { result: c.turn() === 'w' ? '0-1' : '1-0', how: 'Checkmate' };
   if (c.isStalemate()) return { result: '1/2-1/2', how: 'Stalemate' };
   if (c.isInsufficientMaterial()) return { result: '1/2-1/2', how: 'Insufficient material' };
@@ -126,7 +129,7 @@ function gameOverOf(c) {
   return null;
 }
 
-function useNav(len) {
+export function useNav(len) {
   const [view, setView] = useState(null); // null = live (latest)
   const ply = view == null ? len : Math.min(view, len);
   useEffect(() => {
@@ -475,103 +478,6 @@ function PlayGame() {
           <button className="btn btn-danger" onClick={() => { setConfirm(null); epoch.current++; setPending(null); token.current++; engine.cancel(['bot']); finish(cur.you === 'w' ? '0-1' : '1-0', 'Resigned'); }}>Resign</button>
         </div>
       </Sheet>
-    </Stage>
-  );
-}
-
-// ------------------------------------------------------------------ watch
-
-function Watch() {
-  const [white, setWhite] = useState('b1800');
-  const [black, setBlack] = useState('b2200');
-  const [speed, setSpeed] = useState(700);
-  const [uci, setUci] = useState([]);
-  const [running, setRunning] = useState(false);
-  const [over, setOver] = useState(null);
-  const [savedId, setSavedId] = useState(null);
-  const token = useRef(0);
-  const stage = useStage({ evalBar: true });
-  const { fens, moves, game } = useMemo(() => replay({ startFen: START, uci }), [uci]);
-  const nav = useNav(moves.length);
-  const fen = fens[fens.length - 1];
-  const live = useLiveEval(fens[nav.ply], { movetime: 1500 });
-
-  useEffect(() => {
-    if (!running || over) return undefined;
-    const c = game;
-    const o = gameOverOf(c) || (moves.length >= 300 ? { result: '1/2-1/2', how: 'Move limit' } : null);
-    if (o) {
-      setOver(o);
-      setRunning(false);
-      const wb = botById(white), bb = botById(black);
-      const g = recordPlayed({ source: 'watch', you: null, white: wb.name, black: bb.name, whiteElo: wb.max ? undefined : wb.elo, blackElo: bb.max ? undefined : bb.elo, moves, result: o.result, how: o.how });
-      setSavedId(g.id);
-      sfx.end();
-      return undefined;
-    }
-    const my = ++token.current;
-    const bot = botById(c.turn() === 'w' ? white : black);
-    const t0 = Date.now();
-    botMove(bot, fen, { tag: 'bot', stops: ['eval'] }).then(async (u) => {
-      const wait = Math.max(0, speed - (Date.now() - t0));
-      await new Promise(r => setTimeout(r, wait));
-      if (my !== token.current || !u) return;
-      const g = new Chess(fen);
-      try { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); moveSound(m, g.inCheck()); } catch { return; }
-      setUci(x => [...x, u]);
-    });
-    return () => { token.current++; engine.cancel(['bot']); };
-  }, [running, fen, over]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const wb = botById(white), bb = botById(black);
-  const reset = () => { token.current++; engine.cancel(['bot']); setRunning(false); setUci([]); setOver(null); setSavedId(null); nav.setView(null); };
-  const shown = fens[nav.ply];
-  return (
-    <Stage stage={stage}
-      top={<PlayerStrip icon={bb.icon} name={bb.name} sub={bb.max ? 'Max' : bb.elo} color="b" fen={shown} active={running && new Chess(fen).turn() === 'b'} />}
-      bottom={<PlayerStrip icon={wb.icon} name={wb.name} sub={wb.max ? 'Max' : wb.elo} color="w" fen={shown} active={running && new Chess(fen).turn() === 'w'} />}
-      evalBar={<EvalBar height={stage.size} line={live.lines[0]} result={over && nav.live ? over.result : null} />}
-      board={<Board fen={shown} size={stage.size} lastMove={nav.ply ? moves[nav.ply - 1] : null} />}
-    >
-      <div className="panel panel-pad space-y-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-white">Watch</h1>
-          <a href="#/play" className="btn btn-quiet btn-sm">Back to Play</a>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-ink-300">White
-            <select className="w-full mt-1" value={white} disabled={running} onChange={(e) => { reset(); setWhite(e.target.value); }}>
-              {BOTS.map(b => <option key={b.id} value={b.id}>{b.name} {b.max ? '(max)' : `(${b.elo})`}</option>)}
-            </select>
-          </label>
-          <label className="text-xs text-ink-300">Black
-            <select className="w-full mt-1" value={black} disabled={running} onChange={(e) => { reset(); setBlack(e.target.value); }}>
-              {BOTS.map(b => <option key={b.id} value={b.id}>{b.name} {b.max ? '(max)' : `(${b.elo})`}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-ink-300">Pace</span>
-          <Seg value={speed} onChange={setSpeed} options={[[200, 'Fast'], [700, 'Normal'], [1800, 'Slow']]} />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {over ? <button className="btn btn-primary" onClick={reset}>New match</button> : (
-            <button className="btn btn-primary" onClick={() => { setRunning(r => !r); nav.setView(null); }}>{running ? 'Pause' : uci.length ? 'Resume' : 'Start'}</button>
-          )}
-          <button className="btn" onClick={reset} disabled={!uci.length}>Reset</button>
-        </div>
-        {over && (
-          <div className="verdict v-info">
-            <div className="font-semibold text-white">{over.result === '1-0' ? `${wb.name} wins` : over.result === '0-1' ? `${bb.name} wins` : 'Draw'}</div>
-            <div className="text-sm text-ink-200">{over.how}</div>
-            {savedId && <a className="btn btn-sm mt-2" href={href(`/review/game/${savedId}`, { analyze: 1 })}>Review it</a>}
-          </div>
-        )}
-      </div>
-      <div className="panel p-2 flex-1 min-h-[140px] flex flex-col">
-        <MoveList sans={moves.map(m => m.san)} ply={nav.ply} onJump={nav.jump} className="flex-1" maxHeight={stage.portrait ? 220 : undefined} />
-      </div>
-      <NavButtons ply={nav.ply} len={moves.length} jump={nav.jump} />
     </Stage>
   );
 }

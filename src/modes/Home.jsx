@@ -51,7 +51,12 @@ export default function Home() {
         <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="#/watch" className="card-link">
+          <div className="h-sec !text-amber-300">Watch</div>
+          <div className="text-white font-semibold mt-1">Bots play, the coach explains</div>
+          <div className="text-sm text-ink-300 mt-1">Every move graded, with how much it swung the game.</div>
+        </a>
         <a href="#/train/scratch" className="card-link">
           <div className="h-sec !text-sky-300">Scratch pad</div>
           <div className="text-white font-semibold mt-1">Calculate on a board</div>

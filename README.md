@@ -15,7 +15,17 @@ nothing leaves the device.
 - A coach (on by default) and optional assists: progressive hints (first the piece, then the move), threat arrows, a blunder check ("are you sure?" when a move drops your winning chances a lot), and an eval bar.
 - Takebacks, resign, and flip board. The game in progress survives a reload.
 - Finished games are saved for Review.
-- Watch: bot vs bot, with an eval bar.
+
+**Watch** (its own tab)
+- Two bots from the ladder play each other, and the coach commentates every move.
+  - The move's class (best, excellent, inaccuracy, mistake, blunder, great, brilliant, book), the same as in Review.
+  - The coach's reason, in plain English: what goes wrong after it, what was better and why.
+  - How much it moved the mover's winning chances, e.g. *White's winning chances 43% → 15% (−28)*.
+- A win-chance graph with the big swings marked, and a row of key moments you can jump to.
+- Pause any time to ask "Threat?" or "Plan?" for the side to move, or to step through the better move and "why it goes wrong".
+- **Pause on mistakes** stops the match after a mistake or blunder so you can look at it.
+- Pace: fast, normal or slow. Every position is analysed before the next move is played, so the commentary always keeps up.
+- The match survives a reload. Finished matches are saved with their analysis (accuracy for both bots), so Review opens them straight away.
 
 **Puzzles**
 - 58,133 puzzles from the Lichess puzzle database, filtered to well-tested ones and spread evenly from 400 to 2900.
@@ -127,7 +137,7 @@ src/
   ui/
     Board.jsx           the board: tap/drag, dots, promotion, arrows, badges, overlays
     kit.jsx             eval bar, move list, eval graph, layout, small components
-  modes/                Home, Play (+Watch), Puzzles, Train, Review, Insights, Settings
+  modes/                Home, Play, Watch, Puzzles, Train, Review, Insights, Settings
   data/                 opening drills, endgame drills, piece sets
 public/
   puzzles/              puzzle packs by 100-point rating band (p04.json … p29.json)

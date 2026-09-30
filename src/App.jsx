@@ -7,6 +7,7 @@ import { loadBook } from './lib/book.js';
 import { Spinner } from './ui/kit.jsx';
 import Home from './modes/Home.jsx';
 import Play from './modes/Play.jsx';
+import Watch from './modes/Watch.jsx';
 import Puzzles from './modes/Puzzles.jsx';
 import Train from './modes/Train.jsx';
 import Review from './modes/Review.jsx';
@@ -15,6 +16,7 @@ import Settings from './modes/Settings.jsx';
 const TABS = [
   ['', 'Home', HomeIcon],
   ['play', 'Play', PlayIcon],
+  ['watch', 'Watch', WatchIcon],
   ['puzzles', 'Puzzles', PuzzleIcon],
   ['train', 'Train', TrainIcon],
   ['review', 'Review', ReviewIcon],
@@ -41,6 +43,7 @@ export default function App() {
   let page;
   switch (sec) {
     case 'play': page = <Play route={route} />; break;
+    case 'watch': page = <Watch />; break;
     case 'puzzles': page = <Puzzles route={route} />; break;
     case 'train': page = <Train route={route} />; break;
     case 'review': page = <Review route={route} />; break;
@@ -89,6 +92,7 @@ function EnginePill() {
 const I = (d) => function Icon() { return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; };
 function HomeIcon() { return I(<><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></>)(); }
 function PlayIcon() { return I(<><path d="M9 20h6" /><path d="M10 20l-1-6h6l-1 6" /><path d="M12 4a3 3 0 110 6 3 3 0 010-6z" /></>)(); }
+function WatchIcon() { return I(<><rect x="3" y="5" width="18" height="12" rx="2" /><path d="M10 9l4 2-4 2z" /><path d="M8 21h8" /></>)(); }
 function PuzzleIcon() { return I(<><path d="M4 8h4a2 2 0 114 0h4v4a2 2 0 110 4v4H4z" /></>)(); }
 function TrainIcon() { return I(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /></>)(); }
 function ReviewIcon() { return I(<><path d="M3 17l5-6 4 4 8-9" /><path d="M14 6h6v6" /></>)(); }
