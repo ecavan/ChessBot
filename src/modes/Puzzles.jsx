@@ -146,6 +146,8 @@ function Solver({ mode, theme, id }) {
       else if (mode === 'review') { const d = dueReviews(); if (!d.length) { go('/puzzles'); return; } q = d[0].p; }
       else if (visual) q = await pick(pr.ratings.visual + prefs.puzzleDifficulty, { minPlies: 2 + depth * 2, maxPlies: 4 + depth * 2 });
       else q = await pick(pr.ratings.rated + prefs.puzzleDifficulty, { theme: mode === 'theme' ? theme : undefined });
+      // today's daily, already solved: replaying it doesn't count again (streak, review queue)
+      if (mode === 'daily' && progress().daily[today()]?.ok && progress().daily[today()].id === q.id) recorded.current = true;
       setP(q);
       // the opponent's move that sets the puzzle up
       later(() => { setK(1); setStatus('play'); sfx.move(); }, 650);
