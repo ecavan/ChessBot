@@ -503,6 +503,7 @@ function EndgameDrill({ id }) {
   const [over, setOver] = useState(null); // { ok, text }
   const [thinking, setThinking] = useState(false);
   const [hint, setHint] = useState(null);
+  const [botRetry, setBotRetry] = useState(0);
   const token = useRef(0);
   const { game, moves } = useMemo(() => playUci(e.fen, line), [line, e.fen]);
   const fen = game.fen();
@@ -536,13 +537,13 @@ function EndgameDrill({ id }) {
       if (my !== token.current) return;
       setThinking(false);
       const u = r?.bestmove;
-      if (!u) return;
+      if (!u) { setTimeout(() => { if (my === token.current) setBotRetry(n => n + 1); }, 1000); return; } // engine restarting: ask again
       const g = new Chess(fen);
       try { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); moveSound(m, g.inCheck()); } catch { return; }
       setLine(l => [...l, u]);
     });
     return () => { token.current++; setThinking(false); engine.cancel(['bot']); };
-  }, [fen, over]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fen, over, botRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setHint(null), [fen]);
 

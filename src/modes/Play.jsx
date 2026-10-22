@@ -173,6 +173,7 @@ function PlayGame() {
   const [coachArrows, setCoachArrows] = useState(true);
   const [walk, setWalk] = useState(null);
   const [walkI, setWalkI] = useState(0);
+  const [botRetry, setBotRetry] = useState(0);
   const token = useRef(0);
   const guardEval = useRef({});
   const stage = useStage({ evalBar: prefs.playEval });
@@ -225,7 +226,8 @@ function PlayGame() {
     botMove(bot, fen).then((uci) => {
       if (my !== token.current) return;
       setThinking(false);
-      if (!uci) return;
+      // no move: the engine crashed and is restarting (or is still loading). Ask again shortly.
+      if (!uci) { setTimeout(() => { if (my === token.current) setBotRetry(n => n + 1); }, 1000); return; }
       const c = new Chess(fen);
       let m;
       try { m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch { return; }
@@ -234,7 +236,7 @@ function PlayGame() {
       nav.setView(null);
     });
     return () => { if (my === token.current) { token.current++; setThinking(false); engine.cancel(['bot']); } };
-  }, [fen, over, pending, !!walk]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fen, over, pending, !!walk, botRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // blunder check: evaluate your position in the background while you think
   useEffect(() => {

@@ -88,6 +88,7 @@ export default function Watch() {
   const [ask, setAsk] = useState(null); // { kind: 'threat'|'plan', fen, busy, res }
   const [walk, setWalk] = useState(null);
   const [walkI, setWalkI] = useState(0);
+  const [botRetry, setBotRetry] = useState(0);
   const token = useRef(0);
   const epoch = useRef(0);
   const busy = useRef(false);
@@ -155,13 +156,13 @@ export default function Watch() {
       await new Promise(r => setTimeout(r, wait));
       if (my !== token.current) return;
       setThinking(false);
-      if (!u) return;
+      if (!u) { setTimeout(() => { if (my === token.current) setBotRetry(n => n + 1); }, 1000); return; } // engine restarting: ask again
       const g = new Chess(fen);
       try { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); moveSound(m, g.inCheck()); } catch { return; }
       setUci(x => [...x, u]);
     });
     return () => { if (my === token.current) { token.current++; setThinking(false); engine.cancel(['bot']); } };
-  }, [running, fen, over, done, !!walk]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [running, fen, over, done, !!walk, botRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a finished match keeps its analysis, so Review opens it straight away
   useEffect(() => {
