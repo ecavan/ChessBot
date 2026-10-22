@@ -67,6 +67,8 @@ function terminalOf(fen) {
 }
 
 const slim = (l) => ({ ...(l.cp != null ? { cp: l.cp } : {}), ...(l.mate != null ? { mate: l.mate } : {}), depth: l.depth, pv: (l.pv || []).slice(0, 12) });
+// a finished game as an engine line: mate shows as #, not +100.00
+const termLine = (t) => (t === 0 ? { cp: 0 } : { mate: 0, cp: t });
 const whiteWin = (p) => (p ? winPct(p.terminal != null ? p.terminal : cpOf(p.lines[0])) : null);
 const moveLabel = (fen, san) => { const [, t, , , , n] = fen.split(' '); return `${n}${t === 'w' ? '.' : '…'} ${san}`; };
 
@@ -208,7 +210,7 @@ export default function Watch() {
   const orientation = flip ? 'black' : 'white';
   // the eval bar shows the newest analysed position up to the one on the board
   const evAt = done ? evals[Math.min(nav.ply, done - 1)] : null;
-  const barLine = evAt ? (evAt.terminal != null ? { cp: evAt.terminal } : evAt.lines[0]) : null;
+  const barLine = evAt ? (evAt.terminal != null ? termLine(evAt.terminal) : evAt.lines[0]) : null;
   const topColor = flip ? 'w' : 'b';
 
   async function doAsk(kind) {
@@ -347,7 +349,7 @@ export default function Watch() {
         <div className="panel panel-pad space-y-2" style={order(3)}>
           <div className="flex items-center justify-between">
             <span className="h-sec">White's winning chances</span>
-            {nav.ply < done && <span className="text-xs text-ink-300 num">{fmtScore(evals[nav.ply].terminal != null ? { cp: evals[nav.ply].terminal } : evals[nav.ply].lines[0])}</span>}
+            {nav.ply < done && <span className="text-xs text-ink-300 num">{fmtScore(evals[nav.ply].terminal != null ? termLine(evals[nav.ply].terminal) : evals[nav.ply].lines[0])}</span>}
           </div>
           <EvalGraph wins={wins} marks={marks} ply={nav.ply} onJump={(p) => { setRunning(false); nav.jump(p); }} height={72} />
           {keyMoments.length > 0 && (
