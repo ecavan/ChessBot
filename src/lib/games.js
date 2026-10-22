@@ -31,7 +31,7 @@ function trim(list) {
   return list.filter(g => !drop.has(g.id));
 }
 function persist() {
-  games = trim(games);
+  games = trim([...games]); // a new array, so subscribers (useSyncExternalStore) see the change
   let ok = save(KEYS.games, games);
   // out of room (about 5 MB per site): drop unreviewed imports, oldest first, then old reviews
   while (!ok) {
