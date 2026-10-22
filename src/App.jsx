@@ -4,6 +4,7 @@ import { usePrefs } from './lib/prefs.js';
 import { engine, FLAVOR_NAME } from './engine/engine.js';
 import { useEngineStatus } from './engine/useEngine.js';
 import { loadBook } from './lib/book.js';
+import { refreshSummaries } from './lib/analyze.js';
 import { Spinner } from './ui/kit.jsx';
 import Home from './modes/Home.jsx';
 import Play from './modes/Play.jsx';
@@ -25,7 +26,7 @@ const TABS = [
 export default function App() {
   const route = useRoute();
   const [prefs] = usePrefs();
-  useEffect(() => { engine.start(prefs.engine); loadBook(); try { navigator.storage?.persist?.(); } catch { /* not supported */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { engine.start(prefs.engine); refreshSummaries().catch(() => {}); try { navigator.storage?.persist?.(); } catch { /* not supported */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: light)');
     const apply = () => {

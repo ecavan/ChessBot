@@ -26,7 +26,7 @@ const useGames = () => useSyncExternalStore(subscribeGames, allGames);
 
 export default function Review({ route }) {
   const sub = route.parts[1];
-  if (sub === 'game' && route.parts[2]) return <GameReview key={route.parts[2]} id={decodeURIComponent(route.parts[2])} auto={!!route.query.analyze} />;
+  if (sub === 'game' && route.parts[2]) return <GameReview key={route.parts[2]} id={decodeURIComponent(route.parts[2])} auto={!!route.query.analyze} startPly={route.query.ply != null ? Number(route.query.ply) : null} />;
   if (sub === 'import') return <Import />;
   if (sub === 'insights') return <Insights />;
   return <GameList />;
@@ -168,26 +168,26 @@ function explain(c, move, fenBefore, bestSan, mover) {
   const who = mover === 'w' ? 'White' : 'Black';
   const pct = (x) => `${Math.round(x)}%`;
   switch (c.cls) {
-    case 'brilliant': return `A brilliant sacrifice: ${move.san} gives up material for a winning attack.`;
-    case 'great': return `The only good move. Everything else was clearly worse.`;
+    case 'brilliant': return `A brilliant sacrifice: ${move.san} gives up material, and it works.`;
+    case 'great': return c.wBest >= 99 ? `Finds the forced mate.` : `Punishes the opponent's mistake with the best move.`;
     case 'best': return `The engine's top choice.`;
     case 'excellent': return `Nearly as good as the best move (${bestSan}).`;
     case 'good': return `A decent move; ${bestSan} was a bit stronger.`;
     case 'book': return `A known opening move.`;
     case 'inaccuracy': return `${bestSan} was better. ${who}'s winning chances slip from ${pct(c.wBest)} to ${pct(c.wAfter)}.`;
     case 'mistake': return `${bestSan} was much better. ${who}'s winning chances drop from ${pct(c.wBest)} to ${pct(c.wAfter)}.`;
-    case 'miss': return `The opponent had just erred, and ${bestSan} would have punished it. Chances: ${pct(c.wBest)} → ${pct(c.wAfter)}.`;
+    case 'miss': return `A missed mate: ${bestSan} forced checkmate. Winning chances after ${move.san}: ${pct(c.wAfter)}.`;
     case 'blunder': return `A blunder. ${bestSan} kept ${pct(c.wBest)} winning chances; after ${move.san} it's ${pct(c.wAfter)}.`;
     default: return '';
   }
 }
 
-function GameReview({ id, auto }) {
+function GameReview({ id, auto, startPly = null }) {
   const [prefs] = usePrefs();
   const games = useGames();
   const game = games.find(g => g.id === id);
   const stage = useStage({ evalBar: true });
-  const [ply, setPly] = useState(null);
+  const [ply, setPly] = useState(Number.isFinite(startPly) ? startPly : null);
   const [flip, setFlip] = useState(false);
   const [prog, setProg] = useState(null); // { done, total }
   const [engineOn, setEngineOn] = useState(false);
@@ -428,7 +428,7 @@ function Summary({ game, sum }) {
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
         <div className="text-sm text-ink-200 num">{sum.est.w ?? '–'}</div>
-        <div className="text-[11px] uppercase tracking-wider text-ink-400">Game rating</div>
+        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How strong the moves in this game were, on chess.com's rapid scale. One game is a rough guide; Insights averages your last ten for your level.">Game rating</div>
         <div className="text-sm text-ink-200 num">{sum.est.b ?? '–'}</div>
       </div>
       <div className="mt-3 space-y-0.5">

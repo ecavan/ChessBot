@@ -5,11 +5,12 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { allGames, subscribeGames, resultFor } from '../lib/games.js';
 import { analyzeGame, classified } from '../lib/analyze.js';
-import { phaseOf } from '../lib/review.js';
+import { phaseOf, levelFrom, CLASSES } from '../lib/review.js';
+import { href } from '../lib/router.js';
 import { loadBook } from '../lib/book.js';
 import { usePrefs } from '../lib/prefs.js';
 import { engine } from '../engine/engine.js';
-import { Stat, Progress, Spinner, Seg } from '../ui/kit.jsx';
+import { Stat, Progress, Spinner, Seg, ClsDot } from '../ui/kit.jsx';
 import { GameRow } from './Review.jsx';
 
 const PHASES = ['opening', 'middlegame', 'endgame'];
@@ -34,7 +35,10 @@ export default function Insights() {
     const phase = Object.fromEntries(PHASES.map(p => [p, { acc: 0, n: 0, bad: 0 }]));
     const openings = {};
     const trend = [];
+    const ratings = [];
     let blunders = 0, mistakes = 0, moves = 0;
+    const moments = []; // your brilliant, great and blunder moves, oldest first
+    const totals = {};
     const byColor = { w: { win: 0, draw: 0, loss: 0 }, b: { win: 0, draw: 0, loss: 0 } };
     const chrono = [...reviewed].sort((a, b) => a.at - b.at);
     for (const g of chrono) {
@@ -47,19 +51,22 @@ export default function Insights() {
         const [, side, , , , full] = c.fens[i].split(' ');
         const ph = phaseOf(c.fens[i], (Number(full) - 1) * 2 + (side === 'b' ? 1 : 0));
         phase[ph].acc += x.acc; phase[ph].n++;
+        totals[x.cls] = (totals[x.cls] || 0) + 1;
+        if (x.cls === 'brilliant' || x.cls === 'great' || x.cls === 'blunder') moments.push({ g, i, cls: x.cls, san: c.moves[i].san, drop: x.drop, move: Number(full), black: mover === 'b' });
         if (x.cls === 'blunder') { blunders++; phase[ph].bad++; }
         if (x.cls === 'mistake' || x.cls === 'miss') { mistakes++; phase[ph].bad++; }
         moves++;
       });
       const acc = g.review.summary.acc[g.you];
       if (acc != null) trend.push(acc);
+      ratings.push(g.review.summary.est?.[g.you] ?? null);
       const res = resultFor(g, g.you);
       if (res !== 'unfinished') byColor[g.you][res]++;
       const fam = family(g.review.summary.opening?.name);
       const o = (openings[fam + '|' + g.you] ||= { name: fam, color: g.you, n: 0, pts: 0, acc: 0 });
       o.n++; o.pts += res === 'win' ? 1 : res === 'draw' ? 0.5 : 0; o.acc += acc || 0;
     }
-    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, blunders, mistakes, moves, byColor, n: chrono.length };
+    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, ratings, moments, totals, blunders, mistakes, moves, byColor, n: chrono.length };
   }, [reviewed, ready]);
 
   async function analyzeAll() {
@@ -76,6 +83,13 @@ export default function Insights() {
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const last10 = stats ? avg(stats.trend.slice(-10)) : null;
   const allAvg = stats ? avg(stats.trend) : null;
+  const recent = stats ? stats.ratings.slice(-10).filter(x => x != null) : [];
+  const level = levelFrom(recent);
+  // your level after each game: the average game rating of that game and the nine before it
+  const levels = stats ? stats.ratings.map((_, i) => levelFrom(stats.ratings.slice(Math.max(0, i - 9), i + 1))).filter(x => x != null) : [];
+  // brilliant moves first, then great ones, newest first within each
+  const best = stats ? stats.moments.filter(m => m.cls !== 'blunder').reverse().sort((a, b) => (a.cls === 'brilliant' ? 0 : 1) - (b.cls === 'brilliant' ? 0 : 1)) : [];
+  const bad = stats ? stats.moments.filter(m => m.cls === 'blunder').reverse() : [];
   const worst = stats ? PHASES.map(p => ({ p, a: stats.phase[p].n ? stats.phase[p].acc / stats.phase[p].n : null })).filter(x => x.a != null).sort((a, b) => a.a - b.a)[0] : null;
 
   return (
@@ -111,16 +125,42 @@ export default function Insights() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Stat k="Your level" v={level ?? '–'} s={level != null ? `from your last ${recent.length} games` : 'review 3 or more games'} />
             <Stat k="Accuracy" v={allAvg?.toFixed(1)} s={last10 != null ? `last 10: ${last10.toFixed(1)}` : null} />
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
-            <Stat k="As White" v={`${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss}`} s="W-D-L" />
-            <Stat k="As Black" v={`${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} s="W-D-L" />
+            <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <section className="panel panel-pad min-w-0">
+              <div className="h-sec mb-3">Your level</div>
+              <LevelChart values={levels.slice(-60)} />
+              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. Play better for ten games and it shows.</p>
+            </section>
+            <section className="panel panel-pad min-w-0">
+              <div className="h-sec mb-3">Accuracy by game</div>
+              <TrendChart values={stats.trend.slice(-40)} />
+            </section>
           </div>
 
           <section className="panel panel-pad">
-            <div className="h-sec mb-3">Accuracy by game</div>
-            <TrendChart values={stats.trend.slice(-40)} />
+            <div className="h-sec mb-3">Your moves</div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+              {QUALITY.map(k => (
+                <div key={k} className="stat !p-2.5 text-center">
+                  <div className="flex justify-center"><ClsDot cls={k} size={20} /></div>
+                  <div className="text-lg font-semibold text-white num mt-1">{stats.totals[k] || 0}</div>
+                  <div className="text-[11px] text-ink-300">{CLASSES[k].label}</div>
+                  <div className="text-[11px] text-ink-400 num">{((stats.totals[k] || 0) / stats.n).toFixed(1)} / game</div>
+                </div>
+              ))}
+            </div>
           </section>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <MomentList title="Your best moves" empty="No brilliant or great moves yet." list={best} />
+            <MomentList title="Blunders to learn from" empty="No blunders. Nice." list={bad} />
+          </div>
 
           <section className="panel panel-pad">
             <div className="h-sec mb-3">By phase</div>
@@ -167,6 +207,48 @@ export default function Insights() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+const QUALITY = ['brilliant', 'great', 'best', 'excellent', 'good', 'inaccuracy', 'mistake', 'miss', 'blunder'];
+
+/** A list of moments (brilliant, great or blunder moves), each opening the review at that move. */
+function MomentList({ title, empty, list }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? list : list.slice(0, 8);
+  return (
+    <section className="panel panel-pad min-w-0">
+      <div className="flex items-center justify-between mb-2"><div className="h-sec">{title}</div><span className="text-xs text-ink-400 num">{list.length}</span></div>
+      {!list.length ? <div className="text-sm text-ink-400">{empty}</div> : (
+        <div className="divide-y divide-ink-800">
+          {shown.map(m => (
+            <a key={m.g.id + ':' + m.i} href={href(`/review/game/${encodeURIComponent(m.g.id)}`, { ply: m.i + 1 })} className="flex items-center gap-2.5 py-2 hover:bg-ink-800/40 rounded px-1">
+              <ClsDot cls={m.cls} size={18} />
+              <span className="font-semibold text-white num w-28 shrink-0 whitespace-nowrap">{m.move}{m.black ? '…' : '.'} {m.san}</span>
+              <span className="text-sm text-ink-300 truncate min-w-0">vs {m.g.you === 'w' ? m.g.black : m.g.white}{m.g.date ? ` · ${m.g.date}` : ''}</span>
+              {m.cls === 'blunder' && <span className="ml-auto text-xs text-rose-300 num shrink-0">−{Math.round(m.drop)}%</span>}
+            </a>
+          ))}
+        </div>
+      )}
+      {list.length > 8 && <button className="btn btn-sm btn-quiet mt-2" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${list.length}`}</button>}
+    </section>
+  );
+}
+
+function LevelChart({ values }) {
+  if (values.length < 2) return <div className="text-sm text-ink-400">Needs three or more reviewed games.</div>;
+  const W = 600, H = 120;
+  const lo = Math.floor((Math.min(...values) - 100) / 100) * 100, hi = Math.ceil((Math.max(...values) + 100) / 100) * 100;
+  const x = (i) => (i / (values.length - 1)) * W;
+  const y = (v) => H - ((v - lo) / (hi - lo)) * H;
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: H }}>
+        <polyline points={values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="flex justify-between text-[11px] text-ink-400 num mt-1"><span>{lo}–{hi}</span><span>now {values[values.length - 1]}</span></div>
     </div>
   );
 }

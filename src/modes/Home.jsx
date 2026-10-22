@@ -7,6 +7,7 @@ import { allGames, subscribeGames } from '../lib/games.js';
 import { botById } from '../engine/bots.js';
 import { href } from '../lib/router.js';
 import { GameRow } from './Review.jsx';
+import { levelFrom } from '../lib/review.js';
 
 export default function Home() {
   const games = useSyncExternalStore(subscribeGames, allGames);
@@ -25,6 +26,7 @@ export default function Home() {
   const daily = pr.daily[today()];
   const mine = games.filter(g => g.you && g.review?.summary);
   const accs = mine.slice(0, 10).map(g => g.review.summary.acc[g.you]).filter(x => x != null);
+  const level = levelFrom(mine.slice(0, 10).map(g => g.review.summary.est?.[g.you] ?? null));
   const avgAcc = accs.length ? accs.reduce((a, b) => a + b, 0) / accs.length : null;
   const bot = cur ? botById(cur.botId) : null;
   return (
@@ -48,7 +50,7 @@ export default function Home() {
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Puzzle rating</div><div className="v">{pr.ratings.rated}</div><div className="s">streak {pr.streak} · best {pr.best}</div></a>
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Visualize</div><div className="v">{pr.ratings.visual}</div><div className="s">{pr.plays.visual} played</div></a>
         <a href={due ? href('/puzzles/solve', { mode: 'review' }) : '#/puzzles'} className="stat hover:border-ink-500 transition"><div className="k">Mistakes to review</div><div className="v">{due}</div><div className="s">{pr.queue.length} in the queue</div></a>
-        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
+        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `level ${level} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

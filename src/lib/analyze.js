@@ -7,7 +7,8 @@
 import { Chess } from 'chess.js';
 import { engine } from '../engine/engine.js';
 import { replay, saveGame, getGame } from './games.js';
-import { classifyGame, gameAccuracy, ratingFromAccuracy, counts } from './review.js';
+import { classifyGame, gameAccuracy, gameRating, counts } from './review.js';
+import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 
 function terminalOf(fen) {
@@ -79,8 +80,21 @@ export function summarize(game, review) {
   return {
     acc,
     // a rating guess needs enough moves to mean anything
-    est: { w: movesBy(cls, first, 'w') >= 12 ? ratingFromAccuracy(acc.w) : null, b: movesBy(cls, first, 'b') >= 12 ? ratingFromAccuracy(acc.b) : null },
+    est: { w: movesBy(cls, first, 'w') >= 12 ? gameRating(acc.w, acc.b, moves.length) : null, b: movesBy(cls, first, 'b') >= 12 ? gameRating(acc.b, acc.w, moves.length) : null },
     counts: { w: counts(cls, 'w', first), b: counts(cls, 'b', first) },
     opening: openingOf(fens),
+    v: SUMMARY_V,
   };
+}
+
+/** Bumped when the classification, accuracy or game rating changes: older summaries are redone. */
+export const SUMMARY_V = 2;
+
+/** Redo the summaries of reviewed games from an older version (cheap: no engine needed). */
+export async function refreshSummaries() {
+  await loadBook();
+  for (const g of allGames()) {
+    if (!g.review?.summary || g.review.summary.v === SUMMARY_V || g.review.partial) continue;
+    try { saveGame({ ...g, review: { ...g.review, summary: summarize(g, g.review) } }); } catch { /* leave it */ }
+  }
 }
