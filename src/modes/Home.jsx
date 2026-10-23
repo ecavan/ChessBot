@@ -67,9 +67,9 @@ export default function Home() {
           <div className="text-sm text-ink-300 mt-1">Every move graded, with how much it swung the game.</div>
         </a>
         <a href="#/train" className="card-link">
-          <div className="h-sec !text-sky-300">Basics</div>
+          <div className="h-sec !text-sky-300">Course</div>
           <div className="text-white font-semibold mt-1">{lessonsDone ? `${lessonsDone} of ${LESSONS.length} lessons done` : `${LESSONS.length} short lessons`}</div>
-          <div className="text-sm text-ink-300 mt-1">Free pieces, forks, pins, mates: what decides games below 1000.</div>
+          <div className="text-sm text-ink-300 mt-1">From free pieces and forks to sacrifices and rook endgames: up to 1500.</div>
         </a>
         <a href="#/train" className="card-link">
           <div className="h-sec !text-sky-300">Openings</div>

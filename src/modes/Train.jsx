@@ -77,7 +77,7 @@ function Hub() {
     <div className="page fade-up space-y-7">
       <div>
         <h1 className="h-title">Train</h1>
-        <p className="muted mt-1">The basics that decide games, your openings line by line, then the middlegame and endgame with a coach.</p>
+        <p className="muted mt-1">A course from the basics to 1500, your openings line by line, then the middlegame and endgame with a coach.</p>
       </div>
 
       <LessonsSection />

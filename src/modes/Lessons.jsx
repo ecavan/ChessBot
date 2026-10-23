@@ -1,14 +1,14 @@
 /**
- * Basics: short lessons on what decides games below 1000 (src/data/lessons.js). A lesson is the idea
- * and what to ask yourself, three worked examples to solve on the board, then ten practice puzzles
- * of that theme near your puzzle rating (they count, like theme puzzles, and misses come back for
- * review). A lesson is done at 7/10 or better.
+ * The course (src/data/lessons.js): Part 1, Basics (below 1000), and Part 2, Club player (1000 to
+ * 1500). A lesson is the idea and what to ask yourself, three worked examples to solve on the board,
+ * then ten practice puzzles of that theme near your puzzle rating, kept within the part's range
+ * (they count, like theme puzzles, and misses come back for review). Done at 7/10 or better.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, Spinner } from '../ui/kit.jsx';
-import { LESSONS, lessonById } from '../data/lessons.js';
+import { LESSONS, PARTS, lessonById } from '../data/lessons.js';
 import { pick, record, progress } from '../lib/puzzles.js';
 import { playUci, uciOf } from '../lib/chessutil.js';
 import { motifOf } from '../lib/coach.js';
@@ -22,33 +22,50 @@ export const lessonState = () => load(KEY, {});
 const saveLesson = (id, patch) => { const s = lessonState(); save(KEY, { ...s, [id]: { ...(s[id] || {}), ...patch } }); };
 export const lessonDone = (id) => (lessonState()[id]?.best ?? 0) >= PASS;
 
-/** The lesson cards for the Train page. */
+/** The lesson cards for the Train page, by part. */
 export function LessonsSection() {
   const st = lessonState();
-  const done = LESSONS.filter(l => lessonDone(l.id)).length;
   return (
-    <section>
-      <div className="flex items-end justify-between gap-3 mb-1">
-        <div className="h-sec">Basics</div>
-        <span className="text-xs text-ink-400 num">{done}/{LESSONS.length} done</span>
-      </div>
-      <p className="text-sm text-ink-300 mb-3">What decides games below 1000. Each lesson: the idea, three examples to solve, then ten practice puzzles.</p>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {LESSONS.map((l, i) => {
-          const s = st[l.id];
-          return (
-            <a key={l.id} href={`#/train/basics/${l.id}`} className="card-link !p-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-white"><span className="text-ink-400 num mr-1.5">{i + 1}</span>{l.title}</span>
-                {s?.best != null ? <span className={`tag num ${s.best >= PASS ? '!text-emerald-300' : '!text-amber-300'}`}>{s.best >= PASS ? '✓ ' : ''}{s.best}/{PRACTICE}</span> : null}
-              </div>
-              <div className="text-xs text-ink-300 mt-1 leading-relaxed">{l.idea}</div>
-            </a>
-          );
-        })}
-      </div>
-    </section>
+    <>
+      {Object.entries(PARTS).map(([part, P]) => {
+        const list = LESSONS.filter(l => String(l.part) === part);
+        const done = list.filter(l => lessonDone(l.id)).length;
+        return (
+          <section key={part}>
+            <div className="flex items-end justify-between gap-3 mb-1">
+              <div className="h-sec">Course · Part {part}: {P.name}</div>
+              <span className="text-xs text-ink-400 num">{done}/{list.length} done</span>
+            </div>
+            <p className="text-sm text-ink-300 mb-3">{P.blurb} Each lesson: the idea, three examples to solve, then ten practice puzzles.</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {list.map(l => {
+                const s = st[l.id];
+                const n = LESSONS.indexOf(l) + 1;
+                return (
+                  <a key={l.id} href={`#/train/basics/${l.id}`} className="card-link !p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-white"><span className="text-ink-400 num mr-1.5">{n}</span>{l.title}</span>
+                      {s?.best != null ? <span className={`tag num shrink-0 ${s.best >= PASS ? '!text-emerald-300' : '!text-amber-300'}`}>{s.best >= PASS ? '✓ ' : ''}{s.best}/{PRACTICE}</span> : null}
+                    </div>
+                    <div className="text-xs text-ink-300 mt-1 leading-relaxed">{l.idea}</div>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+    </>
   );
+}
+
+const PIECE = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+/** A move the coach has no motif for, in words. */
+function plain(m) {
+  if (m.promotion) return `${m.san}: the pawn promotes.`;
+  if (m.captured) return `${m.san} takes the ${PIECE[m.captured]}.`;
+  if (m.san.includes('+')) return `${m.san}, with check.`;
+  return `${m.san}: a quiet move, and it's the one that works.`;
 }
 
 /** Solve one puzzle on the board. puzzle = { fen, moves: [uci] } (the first move is the opponent's). */
@@ -58,11 +75,14 @@ function useSolver(puzzle, onDone) {
   const [wrong, setWrong] = useState(null);
   const [hint, setHint] = useState(0);
   const [missed, setMissed] = useState(false);
+  // a new puzzle: reset now, in this render, so nothing of the last one (its length) is used
+  const [shown, setShown] = useState(puzzle);
+  if (shown !== puzzle) { setShown(puzzle); setK(0); setStatus('wait'); setWrong(null); setHint(0); setMissed(false); }
   const timers = useRef([]);
   const later = (f, ms) => { const t = setTimeout(f, ms); timers.current.push(t); };
   const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
   useEffect(() => {
-    clear(); setK(0); setStatus('wait'); setWrong(null); setHint(0); setMissed(false);
+    clear();
     if (puzzle) later(() => { setK(1); setStatus('play'); sfx.move(); }, 600);
     return clear;
   }, [puzzle]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -110,9 +130,9 @@ function useSolver(puzzle, onDone) {
   if (status === 'play' && hint >= 2 && answer) arrows.push({ from: answer.slice(0, 2), to: answer.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   if (wrong) marks[wrong.to] = 'rgba(244,63,94,.55)';
   // what each of your moves did, for the explanation afterwards
-  const notes = status === 'done' ? moves.map((m, i) => (i % 2 === 1 ? motifOf(fens[i], puzzle.moves[i], puzzle.moves[i - 1]) || `${m.san}.` : null)).filter(Boolean) : [];
+  const notes = status === 'done' ? moves.map((m, i) => (i % 2 === 1 ? motifOf(fens[i], puzzle.moves[i], puzzle.moves[i - 1]) || plain(m) : null)).filter(Boolean) : [];
   return {
-    fen: wrong?.fen || fens[k], lastMove: wrong ? null : k > 0 ? moves[k - 1] : null, you, status, marks, arrows, onMove, notes, missed,
+    fen: wrong?.fen || fens[Math.min(k, fens.length - 1)], lastMove: wrong ? null : k > 0 ? moves[Math.min(k, moves.length) - 1] : null, you, status, marks, arrows, onMove, notes, missed,
     hint: () => setHint(h => Math.min(2, h + 1)), hintLevel: hint, showAnswer,
   };
 }
@@ -127,7 +147,7 @@ export default function Lesson({ id }) {
   const next = LESSONS[idx + 1];
 
   const example = step >= 1 && step <= 3 ? lesson.examples[step - 1] : null;
-  const exPuzzle = useMemo(() => (example ? { id: example[0], fen: example[1], moves: example[2].split(' '), rating: example[3] } : null), [example]);
+  const exPuzzle = useMemo(() => (example ? { id: example[0], fen: example[1], moves: example[2].split(' '), rating: example[3], why: example[4] } : null), [example]);
   const puzzle = step === 4 ? practice?.p : exPuzzle;
 
   const solver = useSolver(puzzle, (ok) => {
@@ -139,7 +159,8 @@ export default function Lesson({ id }) {
 
   async function loadPractice(results) {
     setPractice({ results, p: null, loading: true });
-    const target = Math.max(400, progress().ratings.rated - 100);
+    const [lo, hi] = PARTS[lesson.part].practice;
+    const target = Math.max(lo, Math.min(hi, progress().ratings.rated - 100));
     try {
       const p = await pick(target, { theme: lesson.theme, exclude: seen.current });
       seen.current.add(p.id);
@@ -168,7 +189,7 @@ export default function Lesson({ id }) {
 
   return (
     <Stage stage={stage}
-      top={<div className="strip"><span className="text-sm font-semibold text-ink-200">Basics · {lesson.title}</span>
+      top={<div className="strip"><span className="text-sm font-semibold text-ink-200">{PARTS[lesson.part].name} · {lesson.title}</span>
         <span className="text-xs text-ink-300">{step === 0 ? 'The idea' : step <= 3 ? `Example ${step} of 3` : step === 4 ? `Practice ${Math.min(PRACTICE, results.length + 1)} of ${PRACTICE}` : 'Done'}</span></div>}
       bottom={<div className="strip"><span className="text-sm text-ink-300">{showBoard && puzzle ? `${solver.you === 'w' ? 'White' : 'Black'} to move` : ''}</span></div>}
       board={showBoard && puzzle ? (
@@ -200,7 +221,7 @@ export default function Lesson({ id }) {
             {solver.status !== 'done' && <p className="text-sm text-ink-300">{lesson.checks[0]}</p>}
             {solver.status === 'done' && (
               <div className={`verdict ${solver.missed ? 'v-info' : 'v-good'} pop`}>
-                {solver.notes.map((n, i) => <div key={i} className="text-sm text-ink-100">{n}</div>)}
+                {exPuzzle?.why ? <div className="text-sm text-ink-100">{exPuzzle.why}</div> : solver.notes.map((n, i) => <div key={i} className="text-sm text-ink-100">{n}</div>)}
               </div>
             )}
             {solver.status !== 'done' ? (
