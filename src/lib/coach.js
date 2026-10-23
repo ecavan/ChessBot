@@ -365,11 +365,11 @@ export function explainMove(fen, uci, ctx = {}) {
     const bestWhy = motifOf(fen, ctx.bestUci);
     const gain = ctx.bestLine?.length ? lineGain(fen, ctx.bestLine, me) : { gain: 0 };
     if (bestWhy && /checkmate/.test(bestWhy)) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'You had'} ${bestSan}, checkmate!`);
-    else if (bestWhy && (gain.gain >= 1 || /forks|pins|skewers|uncovers/.test(bestWhy))) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'Better was'} ${bestSan}: ${bestWhy.replace(/^[^ ]+ /, '')}`);
+    else if (bestWhy && (gain.gain >= 1 || /forks|pins|skewers|uncovers/.test(bestWhy))) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'Better was'} ${bestSan}, which ${bestWhy.replace(/^[^ ]+ /, '')}`);
     else if (big) {
       const bp = tryMove(fen, ctx.bestUci);
       const bpr = bp ? principles(fen, bp.m, bp.g.fen(), ply) : { good: [] };
-      better.push(`Better was ${bestSan}${bpr.good[0] ? `: ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : '.'}`);
+      better.push(`Better was ${bestSan}${bpr.good[0] ? `, which ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : '.'}`);
     }
     arrows.push({ from: ctx.bestUci.slice(0, 2), to: ctx.bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   }

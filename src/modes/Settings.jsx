@@ -115,7 +115,7 @@ export default function Settings() {
 
       <section className="panel panel-pad space-y-3">
         <div className="h-sec">Data</div>
-        <p className="text-sm text-ink-300">Everything is stored on this device: {allGames().length} games, puzzle progress, settings.</p>
+        <p className="text-sm text-ink-300">Everything is stored on this device: {allGames().length} game{allGames().length === 1 ? '' : 's'}, your progress, settings.</p>
         <div className="flex flex-wrap gap-2">
           <button className="btn" onClick={exportData}>Export backup</button>
           <label className="btn cursor-pointer">Restore backup<input type="file" accept="application/json" className="hidden" onChange={importData} /></label>

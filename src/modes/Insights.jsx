@@ -144,9 +144,9 @@ export default function Insights() {
               <div className="space-y-2">
                 {kinds.slice(0, 6).map(x => (
                   <a key={x.k} href={`#/train/basics/${x.k}`} className="flex items-center gap-3 hover:bg-ink-800/40 rounded px-1 py-1">
-                    <span className="w-36 shrink-0 text-sm font-semibold text-white">{x.lesson?.title}</span>
+                    <span className="w-28 sm:w-36 shrink-0 text-sm font-semibold text-white">{x.lesson?.title}</span>
                     <span className="bar flex-1"><i style={{ width: `${(x.n / kinds[0].n) * 100}%`, background: '#f43f5e' }} /></span>
-                    <span className="text-xs text-ink-300 num w-28 text-right shrink-0">{x.n} · {x.perGame.toFixed(1)} a game</span>
+                    <span className="text-xs text-ink-300 num w-24 sm:w-28 text-right shrink-0">{x.n} · {x.perGame.toFixed(1)} a game</span>
                   </a>
                 ))}
               </div>

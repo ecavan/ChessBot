@@ -10,10 +10,10 @@
  * Mistakes that fit none (positional, or a long line) aren't counted.
  */
 import { motifOf } from './coach.js';
-import { load, save } from './store.js';
+import { load, save, KEYS } from './store.js';
 import { lessonById } from '../data/lessons.js';
 
-const KEY = 'chess.plan.v1';
+const KEY = KEYS.plan;
 const WEEK = 7 * 86400000;
 const BAD = new Set(['mistake', 'miss', 'blunder']);
 

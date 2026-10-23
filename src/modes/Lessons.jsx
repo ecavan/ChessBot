@@ -13,10 +13,10 @@ import { pick, record, progress } from '../lib/puzzles.js';
 import { playUci, uciOf } from '../lib/chessutil.js';
 import { motifOf } from '../lib/coach.js';
 import { moveSound, sfx } from '../lib/sound.js';
-import { load, save } from '../lib/store.js';
+import { load, save, KEYS } from '../lib/store.js';
 import { href } from '../lib/router.js';
 
-const KEY = 'chess.lessons.v1';
+const KEY = KEYS.lessons;
 const PRACTICE = 10, PASS = 7;
 export const lessonState = () => load(KEY, {});
 const saveLesson = (id, patch) => { const s = lessonState(); save(KEY, { ...s, [id]: { ...(s[id] || {}), ...patch } }); };
@@ -75,9 +75,10 @@ function useSolver(puzzle, onDone) {
   const [wrong, setWrong] = useState(null);
   const [hint, setHint] = useState(0);
   const [missed, setMissed] = useState(false);
+  const [alt, setAlt] = useState(null); // a mate that isn't the listed move: { fen, move, ply }
   // a new puzzle: reset now, in this render, so nothing of the last one (its length) is used
   const [shown, setShown] = useState(puzzle);
-  if (shown !== puzzle) { setShown(puzzle); setK(0); setStatus('wait'); setWrong(null); setHint(0); setMissed(false); }
+  if (shown !== puzzle) { setShown(puzzle); setK(0); setStatus('wait'); setWrong(null); setHint(0); setMissed(false); setAlt(null); }
   const timers = useRef([]);
   const later = (f, ms) => { const t = setTimeout(f, ms); timers.current.push(t); };
   const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
@@ -109,6 +110,7 @@ function useSolver(puzzle, onDone) {
     }
     moveSound(m, c.inCheck());
     setHint(0);
+    if (uciOf(m) !== puzzle.moves[k]) setAlt({ fen: c.fen(), move: m, ply: k });
     const reached = k + 1;
     setK(reached);
     if (reached >= puzzle.moves.length || c.isCheckmate()) { finish(!missed); return true; }
@@ -130,10 +132,10 @@ function useSolver(puzzle, onDone) {
   if (status === 'play' && hint >= 2 && answer) arrows.push({ from: answer.slice(0, 2), to: answer.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   if (wrong) marks[wrong.to] = 'rgba(244,63,94,.55)';
   // what each of your moves did, for the explanation afterwards
-  const notes = status === 'done' ? moves.map((m, i) => (i % 2 === 1 ? motifOf(fens[i], puzzle.moves[i], puzzle.moves[i - 1]) || plain(m) : null)).filter(Boolean) : [];
+  const notes = status === 'done' ? moves.map((m, i) => (i % 2 === 1 ? (alt?.ply === i ? motifOf(fens[i], uciOf(alt.move), puzzle.moves[i - 1]) || plain(alt.move) : motifOf(fens[i], puzzle.moves[i], puzzle.moves[i - 1]) || plain(m)) : null)).filter(Boolean) : [];
   return {
-    fen: wrong?.fen || fens[Math.min(k, fens.length - 1)], lastMove: wrong ? null : k > 0 ? moves[Math.min(k, moves.length) - 1] : null, you, status, marks, arrows, onMove, notes, missed,
-    hint: () => setHint(h => Math.min(2, h + 1)), hintLevel: hint, showAnswer,
+    fen: wrong?.fen || alt?.fen || fens[Math.min(k, fens.length - 1)], lastMove: wrong ? null : alt ? alt.move : k > 0 ? moves[Math.min(k, moves.length) - 1] : null, you, status, marks, arrows, onMove, notes, missed,
+    hint: () => { setMissed(true); setHint(h => Math.min(2, h + 1)); }, hintLevel: hint, showAnswer,
   };
 }
 
@@ -191,7 +193,7 @@ export default function Lesson({ id }) {
     <Stage stage={stage}
       top={<div className="strip"><span className="text-sm font-semibold text-ink-200">{PARTS[lesson.part].name} · {lesson.title}</span>
         <span className="text-xs text-ink-300">{step === 0 ? 'The idea' : step <= 3 ? `Example ${step} of 3` : step === 4 ? `Practice ${Math.min(PRACTICE, results.length + 1)} of ${PRACTICE}` : 'Done'}</span></div>}
-      bottom={<div className="strip"><span className="text-sm text-ink-300">{showBoard && puzzle ? `${solver.you === 'w' ? 'White' : 'Black'} to move` : ''}</span></div>}
+      bottom={<div className="strip"><span className="text-sm text-ink-300">{showBoard && puzzle && solver.status !== 'done' ? `${solver.you === 'w' ? 'White' : 'Black'} to move` : ''}</span></div>}
       board={showBoard && puzzle ? (
         <Board fen={solver.fen} orientation={solver.you === 'w' ? 'white' : 'black'} size={stage.size}
           movable={solver.status === 'play' ? solver.you : 'none'} onMove={solver.onMove} lastMove={solver.lastMove} marks={solver.marks} arrows={solver.arrows} />
@@ -238,13 +240,15 @@ export default function Lesson({ id }) {
         {step === 4 && (
           <>
             <div className="flex items-end justify-between">
-              <div className="text-lg font-semibold text-white">{practice?.loading ? 'Finding a puzzle…' : solver.status === 'done' ? (solver.missed ? 'Not this time' : 'Solved!') : `Find the move for ${solver.you === 'w' ? 'White' : 'Black'}`}</div>
+              <div className="text-lg font-semibold text-white">{practice?.loading ? 'Finding a puzzle…' : practice?.err ? 'No puzzle' : solver.status === 'done' ? (solver.missed ? 'Not this time' : 'Solved!') : `Find the move for ${solver.you === 'w' ? 'White' : 'Black'}`}</div>
               <span className="text-sm text-ink-300 num">{score}/{results.length}</span>
             </div>
             <div className="flex gap-1">{Array.from({ length: PRACTICE }, (_, i) => <span key={i} className={`h-2 flex-1 rounded-full ${i < results.length ? (results[i] ? 'bg-emerald-500' : 'bg-rose-500') : 'bg-ink-700'}`} />)}</div>
             {practice?.err && <p className="text-sm text-rose-300">{practice.err}</p>}
             {solver.status === 'done' && solver.notes.length > 0 && <div className={`verdict ${solver.missed ? 'v-info' : 'v-good'} pop`}>{solver.notes.map((n, i) => <div key={i} className="text-sm text-ink-100">{n}</div>)}</div>}
-            {solver.status === 'done' ? (
+            {practice?.err ? (
+              <button className="btn btn-primary btn-lg w-full" onClick={() => loadPractice(results)}>Try again</button>
+            ) : solver.status === 'done' ? (
               <button className="btn btn-primary btn-lg w-full" onClick={nextPractice}>{results.length >= PRACTICE ? 'See your score' : 'Next puzzle'}</button>
             ) : (
               <div className="grid grid-cols-2 gap-2">

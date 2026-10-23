@@ -22,4 +22,6 @@ export const KEYS = {
   games: 'chess.games.v2',
   puzzles: 'chess.puzzles.v2',
   train: 'chess.train.v2',
+  lessons: 'chess.lessons.v1',
+  plan: 'chess.plan.v1',
 };

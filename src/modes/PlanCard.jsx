@@ -18,7 +18,7 @@ export default function PlanCard({ rows, compact = false }) {
   const plan = weeklyPlan(rows);
   if (!plan) {
     return compact ? null : (
-      <div className="panel panel-pad text-sm text-ink-300">Review five or more of your games and you'll get a plan for the week here: the mistake that costs you most and the lesson that fixes it.</div>
+      <div className="panel panel-pad text-sm text-ink-300">{rows.length < 5 ? "Review five or more of your games and you'll get a plan for the week here: the mistake that costs you most and the lesson that fixes it." : 'No tactical mistakes in your recent games for a lesson to fix. Nice.'}</div>
     );
   }
   const l = plan.lessonData;

@@ -118,6 +118,7 @@ function Solver({ mode, theme, id }) {
   const [hint, setHint] = useState(0);
   const [delta, setDelta] = useState(null);
   const [wrongMove, setWrongMove] = useState(null);
+  const [altMate, setAltMate] = useState(null); // a mate that isn't the listed move: { fen, move }
   const [depth, setDepth] = useState(1); // visualize: your moves announced
   const [shown, setShown] = useState(false); // visualize: announced line is visible on the board (peek)
   const [solving, setSolving] = useState(false); // visualize: after the answer, the board catches up
@@ -131,7 +132,7 @@ function Solver({ mode, theme, id }) {
 
   async function next() {
     timers.current.forEach(clearTimeout);
-    setP(null); setErr(null); setK(0); setStatus('loading'); setFailed(false); setHint(0); setDelta(null); setWrongMove(null); setShown(false); setSolving(false);
+    setP(null); setErr(null); setK(0); setStatus('loading'); setFailed(false); setHint(0); setDelta(null); setWrongMove(null); setAltMate(null); setShown(false); setSolving(false);
     recorded.current = false;
     try {
       let q;
@@ -162,7 +163,7 @@ function Solver({ mode, theme, id }) {
   const hidden = visual ? depth * 2 : 0;
   const visualTarget = 1 + hidden; // the ply you must find
   const inVisual = visual && status !== 'loading' && k === 1 && !solving && !shown;
-  const displayFen = !p ? null : wrongMove?.fen || lineFens[k];
+  const displayFen = !p ? null : wrongMove?.fen || altMate?.fen || lineFens[k];
   const logicFen = !p ? null : inVisual ? lineFens[visualTarget] : wrongMove?.fen || lineFens[k];
 
   function fail() {
@@ -188,6 +189,7 @@ function Solver({ mode, theme, id }) {
     }
     moveSound(m, c.inCheck());
     setHint(0);
+    const alt = u !== p.moves[at] ? { fen: c.fen(), move: m } : null;
     let reached = at + 1;
     if (inVisual) {
       // play the announced moves on the board, then your answer
@@ -195,10 +197,11 @@ function Solver({ mode, theme, id }) {
       setStatus('wait');
       for (let i = 2; i <= at + 1; i++) later(() => { setK(i); sfx.move(); }, (i - 1) * 420);
       reached = at + 1;
-      later(() => afterRight(reached, c.isCheckmate()), (at + 1) * 420);
+      later(() => { if (alt) setAltMate(alt); afterRight(reached, c.isCheckmate()); }, (at + 1) * 420);
       return true;
     }
     setK(reached);
+    if (alt) setAltMate(alt);
     afterRight(reached, c.isCheckmate());
     return true;
   }
@@ -244,7 +247,7 @@ function Solver({ mode, theme, id }) {
   if (hint >= 1 && answer && !done) marks[answer.slice(0, 2)] = 'rgba(16,185,129,.55)';
   if (hint >= 2 && answer && !done) arrows.push({ from: answer.slice(0, 2), to: answer.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   if (wrongMove) { marks[wrongMove.to] = 'rgba(244,63,94,.55)'; }
-  const lm = k > 0 && lineMoves[k - 1] ? lineMoves[k - 1] : null;
+  const lm = altMate ? altMate.move : k > 0 && lineMoves[k - 1] ? lineMoves[k - 1] : null;
   const announced = visual && p ? lineMoves.slice(1, visualTarget) : [];
 
   return (
@@ -295,7 +298,7 @@ function Solver({ mode, theme, id }) {
             <>
               <button className="btn btn-primary btn-lg col-span-2" onClick={next}>{mode === 'daily' ? 'Again' : 'Next puzzle'}</button>
               <a className="btn" href={href('/train/scratch', { fen: lineFens[1] })}>Analyze</a>
-              <button className="btn" onClick={() => { timers.current.forEach(clearTimeout); setK(1); setStatus('play'); setShown(false); setSolving(false); setHint(0); setWrongMove(null); }}>Retry</button>
+              <button className="btn" onClick={() => { timers.current.forEach(clearTimeout); setK(1); setStatus('play'); setShown(false); setSolving(false); setHint(0); setWrongMove(null); setAltMate(null); }}>Retry</button>
             </>
           ) : (
             <>
