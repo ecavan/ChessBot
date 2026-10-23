@@ -1,6 +1,6 @@
 /**
- * Train: opening courses (chessreps-style, with a coach), middlegame practice from those
- * openings, checkmate patterns, endgame basics and the scratch pad.
+ * Train: the Basics lessons (Lessons.jsx), opening courses (chessreps-style, with a coach),
+ * middlegame practice from those openings, checkmate patterns, endgame basics and the scratch pad.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
@@ -19,6 +19,8 @@ import { href, go } from '../lib/router.js';
 import { openingOf, loadBook } from '../lib/book.js';
 import { NavButtons } from './Play.jsx';
 import Course from './Course.jsx';
+import Lesson, { LessonsSection } from './Lessons.jsx';
+import { lessonById } from '../data/lessons.js';
 import { loadCourses, loadCourse, courseStats } from '../lib/repertoire.js';
 import { planNow, threatNow } from '../lib/coachEngine.js';
 
@@ -28,6 +30,7 @@ export default function Train({ route }) {
   if (sub === 'openings' && id) return <Course key={id} id={id} mode={route.query.mode} />;
   if (sub === 'endgames' && ENDGAMES[id]) return <EndgameDrill key={id} id={id} />;
   if (sub === 'notes') return <Notes />;
+  if (sub === 'basics' && lessonById(id)) return <Lesson key={id} id={id} />;
   return <Hub />;
 }
 
@@ -74,8 +77,10 @@ function Hub() {
     <div className="page fade-up space-y-7">
       <div>
         <h1 className="h-title">Train</h1>
-        <p className="muted mt-1">Learn your openings line by line, including what people really play against you, then play the middlegame out with a coach.</p>
+        <p className="muted mt-1">The basics that decide games, your openings line by line, then the middlegame and endgame with a coach.</p>
       </div>
+
+      <LessonsSection />
 
       {!courses ? <div className="text-ink-300 flex items-center gap-2"><Spinner /> Loading courses…</div> : (
         <>

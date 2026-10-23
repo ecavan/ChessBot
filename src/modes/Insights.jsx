@@ -7,6 +7,8 @@ import { allGames, subscribeGames, resultFor } from '../lib/games.js';
 import { analyzeGame, classified } from '../lib/analyze.js';
 import { phaseOf, levelFrom, CLASSES } from '../lib/review.js';
 import { href } from '../lib/router.js';
+import { rowsFromGames, topKinds } from '../lib/plan.js';
+import PlanCard from './PlanCard.jsx';
 import { loadBook } from '../lib/book.js';
 import { usePrefs } from '../lib/prefs.js';
 import { engine } from '../engine/engine.js';
@@ -90,6 +92,8 @@ export default function Insights() {
   // brilliant moves first, then great ones, newest first within each
   const best = stats ? stats.moments.filter(m => m.cls !== 'blunder').reverse().sort((a, b) => (a.cls === 'brilliant' ? 0 : 1) - (b.cls === 'brilliant' ? 0 : 1)) : [];
   const bad = stats ? stats.moments.filter(m => m.cls === 'blunder').reverse() : [];
+  const rows = rowsFromGames(reviewed);
+  const kinds = topKinds(rows);
   const worst = stats ? PHASES.map(p => ({ p, a: stats.phase[p].n ? stats.phase[p].acc / stats.phase[p].n : null })).filter(x => x.a != null).sort((a, b) => a.a - b.a)[0] : null;
 
   return (
@@ -130,6 +134,24 @@ export default function Insights() {
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
             <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />
           </div>
+
+          <PlanCard rows={rows} />
+
+          {kinds.length > 0 && (
+            <section className="panel panel-pad">
+              <div className="h-sec mb-1">What costs you games</div>
+              <p className="text-sm text-ink-300 mb-3">Your mistakes in the last {Math.min(20, rows.length)} games, by what went wrong. Each links to the lesson for it.</p>
+              <div className="space-y-2">
+                {kinds.slice(0, 6).map(x => (
+                  <a key={x.k} href={`#/train/basics/${x.k}`} className="flex items-center gap-3 hover:bg-ink-800/40 rounded px-1 py-1">
+                    <span className="w-36 shrink-0 text-sm font-semibold text-white">{x.lesson?.title}</span>
+                    <span className="bar flex-1"><i style={{ width: `${(x.n / kinds[0].n) * 100}%`, background: '#f43f5e' }} /></span>
+                    <span className="text-xs text-ink-300 num w-28 text-right shrink-0">{x.n} · {x.perGame.toFixed(1)} a game</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="grid md:grid-cols-2 gap-4">
             <section className="panel panel-pad min-w-0">

@@ -8,6 +8,7 @@ import { Chess } from 'chess.js';
 import { engine } from '../engine/engine.js';
 import { replay, saveGame, getGame } from './games.js';
 import { classifyGame, gameAccuracy, gameRating, counts } from './review.js';
+import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 
@@ -83,12 +84,14 @@ export function summarize(game, review) {
     est: { w: movesBy(cls, first, 'w') >= 12 ? gameRating(acc.w, acc.b, moves.length) : null, b: movesBy(cls, first, 'b') >= 12 ? gameRating(acc.b, acc.w, moves.length) : null },
     counts: { w: counts(cls, 'w', first), b: counts(cls, 'b', first) },
     opening: openingOf(fens),
+    // your mistakes by kind (lesson id), for the weekly plan
+    kinds: game.you ? kindsOf({ fens, moves, positions: pos, cls }, game.you) : null,
     v: SUMMARY_V,
   };
 }
 
 /** Bumped when the classification, accuracy or game rating changes: older summaries are redone. */
-export const SUMMARY_V = 2;
+export const SUMMARY_V = 3;
 
 /** Redo the summaries of reviewed games from an older version (cheap: no engine needed). */
 export async function refreshSummaries() {

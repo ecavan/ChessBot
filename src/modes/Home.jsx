@@ -8,6 +8,10 @@ import { botById } from '../engine/bots.js';
 import { href } from '../lib/router.js';
 import { GameRow } from './Review.jsx';
 import { levelFrom } from '../lib/review.js';
+import { rowsFromGames } from '../lib/plan.js';
+import PlanCard from './PlanCard.jsx';
+import { lessonDone } from './Lessons.jsx';
+import { LESSONS } from '../data/lessons.js';
 
 export default function Home() {
   const games = useSyncExternalStore(subscribeGames, allGames);
@@ -29,6 +33,7 @@ export default function Home() {
   const level = levelFrom(mine.slice(0, 10).map(g => g.review.summary.est?.[g.you] ?? null));
   const avgAcc = accs.length ? accs.reduce((a, b) => a + b, 0) / accs.length : null;
   const bot = cur ? botById(cur.botId) : null;
+  const lessonsDone = LESSONS.filter(l => lessonDone(l.id)).length;
   return (
     <div className="page fade-up space-y-5">
       <div className="grid md:grid-cols-2 gap-4">
@@ -46,6 +51,8 @@ export default function Home() {
         </a>
       </div>
 
+      <PlanCard rows={rowsFromGames(games)} compact />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Puzzle rating</div><div className="v">{pr.ratings.rated}</div><div className="s">streak {pr.streak} · best {pr.best}</div></a>
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Visualize</div><div className="v">{pr.ratings.visual}</div><div className="s">{pr.plays.visual} played</div></a>
@@ -59,10 +66,10 @@ export default function Home() {
           <div className="text-white font-semibold mt-1">Bots play, the coach explains</div>
           <div className="text-sm text-ink-300 mt-1">Every move graded, with how much it swung the game.</div>
         </a>
-        <a href="#/train/scratch" className="card-link">
-          <div className="h-sec !text-sky-300">Scratch pad</div>
-          <div className="text-white font-semibold mt-1">Calculate on a board</div>
-          <div className="text-sm text-ink-300 mt-1">Move pieces, see what they hit, grade your lines.</div>
+        <a href="#/train" className="card-link">
+          <div className="h-sec !text-sky-300">Basics</div>
+          <div className="text-white font-semibold mt-1">{lessonsDone ? `${lessonsDone} of ${LESSONS.length} lessons done` : `${LESSONS.length} short lessons`}</div>
+          <div className="text-sm text-ink-300 mt-1">Free pieces, forks, pins, mates: what decides games below 1000.</div>
         </a>
         <a href="#/train" className="card-link">
           <div className="h-sec !text-sky-300">Openings</div>
