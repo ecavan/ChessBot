@@ -12,6 +12,9 @@ import { playUci, uciOf, lineSan } from '../lib/chessutil.js';
 import { moveSound, sfx } from '../lib/sound.js';
 import { usePrefs } from '../lib/prefs.js';
 import { href, go } from '../lib/router.js';
+import { weeklyPlan, rowsFromGames } from '../lib/plan.js';
+import { allGames } from '../lib/games.js';
+import { LESSONS } from '../data/lessons.js';
 
 export default function Puzzles({ route }) {
   if (route.parts[1] === 'solve') return <Solver key={route.key} mode={route.query.mode || 'rated'} theme={route.query.theme} id={route.query.id} />;
@@ -150,7 +153,14 @@ function Solver({ mode, theme, id }) {
       else if (mode === 'review') { const d = dueReviews(); if (!d.length) { go('/puzzles'); return; } q = d[0].p; }
       else if (mode === 'mine') { const d = dueMine(); if (!d.length) { go('/puzzles'); return; } q = d[0].p; }
       else if (visual) q = await pick(pr.ratings.visual + prefs.puzzleDifficulty, { minPlies: 2 + depth * 2, maxPlies: 4 + depth * 2 });
-      else q = await pick(pr.ratings.rated + prefs.puzzleDifficulty, { theme: mode === 'theme' ? theme : undefined });
+      else {
+        // rated: three in ten come from this week's plan, so the plan is trained, not only measured
+        let th = mode === 'theme' ? theme : undefined;
+        let fromPlan = false;
+        if (mode === 'rated' && Math.random() < 0.3) { try { const pl = weeklyPlan(rowsFromGames(allGames())); if (pl?.lessonData?.theme) { th = pl.lessonData.theme; fromPlan = true; } } catch { /* no plan */ } }
+        q = await pick(pr.ratings.rated + prefs.puzzleDifficulty, { theme: th });
+        if (fromPlan) q = { ...q, fromPlan: th };
+      }
       // today's daily, already solved: replaying it doesn't count again (streak, review queue)
       if (mode === 'daily' && progress().daily[today()]?.ok && progress().daily[today()].id === q.id) recorded.current = true;
       setP(q);
@@ -293,6 +303,7 @@ function Solver({ mode, theme, id }) {
                 <div className="text-sm text-ink-200 mt-2">Now play your next move from the position in your head (tap the squares; the board hasn't moved).</div>
               </div>
             )}
+            {p?.fromPlan && done && (() => { const l = LESSONS.find(x => x.theme === p.fromPlan); return l ? <div className="text-xs text-sky-300">From this week's plan: <a className="underline" href={`#/train/basics/${l.id}`}>{l.title}</a></div> : null; })()}
             {p?.mine && status !== 'loading' && (
               <div className="text-xs text-ink-300">From your game vs <b className="text-white">{p.mine.opp}</b>{p.mine.date ? ` · ${p.mine.date}` : ''} · move {Math.ceil((p.mine.ply + 1) / 2)}. {done ? <>You played <b className="text-white">{p.mine.played}</b> ({p.mine.cls}, −{p.mine.drop}% win). <a className="underline" href={href(`/review/game/${encodeURIComponent(p.mine.game)}`, { ply: p.mine.ply + 1 })}>Open the review</a>.</> : 'Find what you missed.'}</div>
             )}
