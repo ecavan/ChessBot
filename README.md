@@ -102,10 +102,13 @@ Stockfish 17.1 compiled to WebAssembly (the `stockfish` npm package), running in
     (three times at most, then the app asks for a reload).
   - If the engine's threads cannot start, the app falls back to the single-threaded builds for the
     rest of the session instead of letting the loader spawn threads without end.
-- The engine files are cached by the service worker at runtime under their own URLs, never
-  precached: Stockfish tells its thread workers apart by a `#…,worker` fragment on the loader's
-  URL, and a precached loader is served from a revisioned URL that loses the fragment, so every
-  thread started as a whole new engine and spawned threads of its own until the tab crashed.
+- The service worker never answers a request for an engine loader script. Stockfish tells its
+  thread workers apart by a `#…,worker` fragment on the loader's URL, and a worker script that a
+  service worker answers (precached, cached at runtime, or even passed through) arrives without
+  its fragment, so every thread started as a whole new engine and spawned threads of its own
+  until the tab crashed. The loaders come from the network and the browser's HTTP cache (they
+  are immutable for a year); only the network files (fetched from inside the worker) are cached
+  by the service worker, for offline use.
 
 Settings shows which engine is running, and lets you pick the review depth (0.4 s to 3 s per position).
 

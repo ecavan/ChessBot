@@ -39,8 +39,8 @@ export default function App() {
       runQueue();
     });
     try { navigator.storage?.persist?.(); } catch { /* not supported */ }
-    // the engine networks moved to the 'stockfish-v2' cache (see vite.config.js): drop the old one
-    try { caches?.delete('stockfish-wasm').catch(() => {}); } catch { /* no cache API */ }
+    // the engine networks moved to the 'stockfish-v3' cache (see vite.config.js): drop the old ones
+    try { for (const c of ['stockfish-wasm', 'stockfish-v2']) caches?.delete(c).catch(() => {}); } catch { /* no cache API */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: light)');

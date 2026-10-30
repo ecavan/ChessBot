@@ -34,19 +34,22 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // The app and the puzzle packs are precached. The engine (its loader scripts and the
-        // networks: lite ~7 MB, full 6 × 13 MB) is cached at runtime instead, under its own URL:
-        // precaching would serve the loader from a `?__WB_REVISION__=…` URL, and a worker's
-        // location is the URL it was served from, so Stockfish's thread workers (told apart by a
-        // `#…,worker` fragment on the loader URL) would lose the fragment, each start as a whole
-        // new engine and spawn threads of their own — a fork bomb that crashed the tab.
+        // The app and the puzzle packs are precached. The engine is special: Stockfish's thread
+        // workers are told apart from the engine by a `#…,worker` fragment on the loader URL, and
+        // a worker script that a service worker answers (from a cache, or even a pass-through
+        // fetch) comes back without its fragment — so every thread would start as a whole new
+        // engine and spawn threads of its own, a fork bomb that crashes the tab within a minute.
+        // So the service worker never answers a worker-script request: the loaders come from the
+        // network / HTTP cache (vercel.json makes them immutable for a year). The network files
+        // (lite ~7 MB, full 6 × 13 MB) are plain fetches from inside the worker and are cached
+        // at runtime for offline use.
         globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
         globIgnores: ['**/stockfish/**'],
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
         runtimeCaching: [{
-          urlPattern: ({ url }) => url.pathname.startsWith('/stockfish/'),
+          urlPattern: ({ url, request }) => url.pathname.startsWith('/stockfish/') && !/\.js$/.test(url.pathname) && request.destination !== 'worker' && request.destination !== 'sharedworker' && request.destination !== 'script',
           handler: 'CacheFirst',
-          options: { cacheName: 'stockfish-v2', expiration: { maxEntries: 40 } },
+          options: { cacheName: 'stockfish-v3', expiration: { maxEntries: 40 } },
         }],
       },
     }),
