@@ -30,15 +30,16 @@ nothing leaves the device.
 **Puzzles**
 - 58,133 puzzles from the Lichess puzzle database, filtered to well-tested ones and spread evenly from 400 to 2900.
 - A puzzle rating (Glicko-lite) and difficulty settings (easier, normal, harder).
-- A daily puzzle and 70+ themes.
+- A daily puzzle (about 200 points above your rating) and 70+ themes.
 - A review queue: missed puzzles come back after 1, 3, 7 and 21 days.
-- Scratch pad inside every puzzle: try a line before you commit, with Stockfish answering your moves if you like. Nothing played there counts.
+- **Your mistakes**: every blunder, mistake and missed mate from your reviewed games becomes a puzzle (the position you had, his move, find what you missed), on the same spaced schedule.
 - **Visualize**, a calculation drill with its own rating.
   - The first move or two of the solution are only *announced*; the board doesn't move.
   - You play the next move from the position in your head.
 
 **Train**
-- Opening courses, chessreps-style. There are 12 courses as White (Italian, 4.Ng5/Fried Liver, Ruy Lopez, Scotch, Vienna, London, Queen's Gambit, and answers to the Sicilian, French, Caro-Kann, Scandinavian and everything else) and 7 as Black (1...e5, Caro-Kann, French, Scandinavian, QGD, Slav, King's Indian).
+- A course of 32 short lessons in two parts: Basics (below 1000: free pieces, the blunder check, mates, forks, pins, skewers, discovered attacks, trapped pieces, removing the defender, promotion, when a piece is attacked, converting a won game) and Club player (1000–1500: deflection, attraction, in-between moves, sacrifices, pawn and rook endgames, zugzwang and more). Each lesson: the idea, three worked examples, ten practice puzzles; 7/10 passes.
+- Opening courses, chessreps-style. Star the one or two you play and the rest fold away. There are 12 courses as White (Italian, 4.Ng5/Fried Liver, Ruy Lopez, Scotch, Vienna, London, Queen's Gambit, and answers to the Sicilian, French, Caro-Kann, Scandinavian and everything else) and 7 as Black (1...e5, Caro-Kann, French, Scandinavian, QGD, Slav, King's Indian).
   - Each course is a tree built from about 2.7 million Lichess blitz and rapid games between players rated 700–2000. It covers every reply people at that level actually play, with its frequency.
   - Your moves are the natural moves Stockfish agrees with.
   - Opponent mistakes are marked with the line that punishes them.
@@ -64,20 +65,24 @@ nothing leaves the device.
 - **Step through**: any line (the better move, what goes wrong after yours, an engine line) can be played one move at a time, or slowly on auto-play, with the reason for each move.
 
 **Review**
-- Import games:
+- **chess.com sync**: save your username in Settings and new games (rapid and blitz by default) are fetched when the app opens or comes to the front, then reviewed in the background while you use the app. A web app can't work while it is closed, so reviews run while it's open and resume where they stopped. Each device keeps its own username; there are no accounts and no server.
+- Import games by hand too:
   - by chess.com username (public API, no login);
   - by Lichess username;
   - by pasted PGN or a .pgn file.
 - Full game review:
   - every position is searched with two lines;
   - moves are classified by the drop in winning chances (Lichess's win% curve): brilliant, great, best, excellent, good, book, inaccuracy, mistake, miss, blunder;
-  - accuracy per side and an estimated game rating;
+  - accuracy per side and an estimated game rating (one game is good to about ±500; your level averages the last ten and shows its ± band);
+  - every review is tagged with the engine that made it; reviews made on the lite network are marked rough, don't count toward your level, and are re-reviewed when the full engine is available;
   - an eval graph and key moments;
   - explanations with the best line;
   - Retry mistakes, where you find the better move yourself.
 - Insights across your reviewed games:
   - the accuracy trend;
   - accuracy and mistakes by phase;
+  - time pressure: mistakes by how long you thought and how much clock you had (from the `%clk` tags in chess.com games);
+  - this week's plan: the mistake that costs you most and the lesson for it;
   - how your openings score, as White and as Black.
 
 ## The engine
@@ -104,6 +109,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # production build in dist/
 npm run preview    # serve dist/ with the isolation headers
+npm test           # coach motifs and plans; review classification, level, clocks, sync filter, mistake puzzles
 ```
 
 ## Deploy and install on the iPad

@@ -24,4 +24,6 @@ export const KEYS = {
   train: 'chess.train.v2',
   lessons: 'chess.lessons.v1',
   plan: 'chess.plan.v1',
+  sync: 'chess.sync.v1',
+  reviewQueue: 'chess.reviewQueue.v1',
 };

@@ -2,16 +2,15 @@
  * Insights across your reviewed games: accuracy over time, by phase, where the blunders happen,
  * how your openings score. Only games where we know which side you played count.
  */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { allGames, subscribeGames, resultFor } from '../lib/games.js';
-import { analyzeGame, classified } from '../lib/analyze.js';
-import { phaseOf, levelFrom, CLASSES } from '../lib/review.js';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { allGames, subscribeGames, resultFor, timeSpent } from '../lib/games.js';
+import { classified } from '../lib/analyze.js';
+import { phaseOf, levelFrom, levelStats, CLASSES } from '../lib/review.js';
+import QueueCard from './QueueCard.jsx';
 import { href } from '../lib/router.js';
 import { rowsFromGames, topKinds } from '../lib/plan.js';
 import PlanCard from './PlanCard.jsx';
 import { loadBook } from '../lib/book.js';
-import { usePrefs } from '../lib/prefs.js';
-import { engine } from '../engine/engine.js';
 import { Stat, Progress, Spinner, Seg, ClsDot } from '../ui/kit.jsx';
 import { GameRow } from './Review.jsx';
 
@@ -21,12 +20,9 @@ function family(name) { return (name || 'Unknown').split(':')[0].trim(); }
 
 export default function Insights() {
   const games = useSyncExternalStore(subscribeGames, allGames);
-  const [prefs] = usePrefs();
   const [ready, setReady] = useState(false);
-  const [batch, setBatch] = useState(null); // { i, n, done, total }
   const [scope, setScope] = useState('all');
-  const stop = useRef(false);
-  useEffect(() => { loadBook().then(() => setReady(true)); return () => { stop.current = true; engine.cancel(['review']); }; }, []);
+  useEffect(() => { loadBook().then(() => setReady(true)); }, []);
 
   const mine = useMemo(() => games.filter(g => g.you && (scope === 'all' || (scope === 'here' ? g.source === 'bot' : g.source !== 'bot' && g.source !== 'watch'))), [games, scope]);
   const reviewed = useMemo(() => mine.filter(g => g.review?.summary), [mine]);
@@ -42,14 +38,28 @@ export default function Insights() {
     const moments = []; // your brilliant, great and blunder moves, oldest first
     const totals = {};
     const byColor = { w: { win: 0, draw: 0, loss: 0 }, b: { win: 0, draw: 0, loss: 0 } };
+    // time pressure: your moves by seconds spent and by seconds left (games with clocks only)
+    const clock = { spent: [[0, 3, 'under 3 s'], [3, 10, '3–10 s'], [10, 30, '10–30 s'], [30, 1e9, 'over 30 s']].map(([lo, hi, label]) => ({ lo, hi, label, n: 0, bad: 0, acc: 0 })),
+      left: [[0, 30, 'under 30 s'], [30, 120, '30 s – 2 min'], [120, 1e9, 'over 2 min']].map(([lo, hi, label]) => ({ lo, hi, label, n: 0, bad: 0, acc: 0 })), games: 0 };
+    let lite = 0;
     const chrono = [...reviewed].sort((a, b) => a.at - b.at);
     for (const g of chrono) {
       let c;
       try { c = classified(g); } catch { continue; }
+      if (!g.review.flavor?.startsWith('full')) lite++;
       const first = c.fens[0].split(' ')[1];
+      const times = timeSpent(g, g.you);
+      const tAt = times ? Object.fromEntries(times.map(t => [t.i, t])) : null;
+      if (times) clock.games++;
       c.cls.forEach((x, i) => {
         const mover = (i % 2 === 0) === (first === 'w') ? 'w' : 'b';
         if (mover !== g.you) return;
+        if (tAt?.[i]) {
+          const t = tAt[i];
+          const isBad = x.cls === 'blunder' || x.cls === 'mistake' || x.cls === 'miss';
+          if (t.spent != null) { const b = clock.spent.find(b => t.spent >= b.lo && t.spent < b.hi); if (b) { b.n++; b.acc += x.acc; if (isBad) b.bad++; } }
+          const l = clock.left.find(b => t.left >= b.lo && t.left < b.hi); if (l) { l.n++; l.acc += x.acc; if (isBad) l.bad++; }
+        }
         const [, side, , , , full] = c.fens[i].split(' ');
         const ph = phaseOf(c.fens[i], (Number(full) - 1) * 2 + (side === 'b' ? 1 : 0));
         phase[ph].acc += x.acc; phase[ph].n++;
@@ -61,32 +71,23 @@ export default function Insights() {
       });
       const acc = g.review.summary.acc[g.you];
       if (acc != null) trend.push(acc);
-      ratings.push(g.review.summary.est?.[g.you] ?? null);
+      // a lite-network review is too rough to rate a game by
+      ratings.push(g.review.flavor?.startsWith('full') ? (g.review.summary.est?.[g.you] ?? null) : null);
       const res = resultFor(g, g.you);
       if (res !== 'unfinished') byColor[g.you][res]++;
       const fam = family(g.review.summary.opening?.name);
       const o = (openings[fam + '|' + g.you] ||= { name: fam, color: g.you, n: 0, pts: 0, acc: 0 });
       o.n++; o.pts += res === 'win' ? 1 : res === 'draw' ? 0.5 : 0; o.acc += acc || 0;
     }
-    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, ratings, moments, totals, blunders, mistakes, moves, byColor, n: chrono.length };
+    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, ratings, moments, totals, blunders, mistakes, moves, byColor, n: chrono.length, lite, clock };
   }, [reviewed, ready]);
-
-  async function analyzeAll() {
-    stop.current = false;
-    const list = todo.slice(0, 50);
-    for (let i = 0; i < list.length; i++) {
-      if (stop.current) break;
-      setBatch({ i, n: list.length, done: 0, total: list[i].uci.length + 1 });
-      await analyzeGame(list[i].id, { ms: Math.min(prefs.analysisTime, 500), onProgress: (done, total) => setBatch({ i, n: list.length, done, total }), isCancelled: () => stop.current });
-    }
-    setBatch(null);
-  }
 
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const last10 = stats ? avg(stats.trend.slice(-10)) : null;
   const allAvg = stats ? avg(stats.trend) : null;
-  const recent = stats ? stats.ratings.slice(-10).filter(x => x != null) : [];
-  const level = levelFrom(recent);
+  const recent = stats ? stats.ratings.filter(x => x != null).slice(-10) : [];
+  const lv = levelStats(recent);
+  const level = lv?.level ?? null;
   // your level after each game: the average game rating of that game and the nine before it
   const levels = stats ? stats.ratings.map((_, i) => levelFrom(stats.ratings.slice(Math.max(0, i - 9), i + 1))).filter(x => x != null) : [];
   // brilliant moves first, then great ones, newest first within each
@@ -107,29 +108,14 @@ export default function Insights() {
         <Seg value={scope} onChange={setScope} options={[['all', 'All'], ['here', 'vs bots'], ['imported', 'Imported']]} />
       </div>
 
-      {todo.length > 0 && (
-        <div className="panel panel-pad space-y-2">
-          {batch ? (
-            <>
-              <div className="flex items-center justify-between text-sm"><span className="text-white font-semibold flex items-center gap-2"><Spinner size={14} /> Reviewing game {batch.i + 1} of {batch.n}</span>
-                <button className="btn btn-sm" onClick={() => { stop.current = true; engine.cancel(['review']); }}>Stop</button></div>
-              <Progress value={((batch.i + batch.done / Math.max(1, batch.total)) / batch.n) * 100} />
-            </>
-          ) : (
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className="text-sm text-ink-200">{todo.length} of your games aren't reviewed yet. Insights only use reviewed games.</span>
-              <button className="btn btn-primary" onClick={analyzeAll}>Review {Math.min(50, todo.length)} now</button>
-            </div>
-          )}
-        </div>
-      )}
+      {todo.length > 0 && <QueueCard />}
 
       {!stats || !stats.n ? (
         <div className="panel panel-pad text-center muted">{ready ? 'Review a few of your games to see insights here.' : <Spinner />}</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat k="Your level" v={level ?? '–'} s={level != null ? `from your last ${recent.length} games` : 'review 3 or more games'} />
+            <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `last ${recent.length} full reviews${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />
             <Stat k="Accuracy" v={allAvg?.toFixed(1)} s={last10 != null ? `last 10: ${last10.toFixed(1)}` : null} />
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
             <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />
@@ -156,8 +142,8 @@ export default function Insights() {
           <div className="grid md:grid-cols-2 gap-4">
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Your level</div>
-              <LevelChart values={levels.slice(-60)} />
-              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. Play better for ten games and it shows.</p>
+              <LevelChart values={levels.slice(-60)} band={lv?.se} />
+              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game, with its ± band: one game is only good to about ±500, so a swing inside the band is noise. Play better for ten games and it shows.</p>
             </section>
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Accuracy by game</div>
@@ -202,6 +188,33 @@ export default function Insights() {
             </div>
             {worst && <p className="text-sm text-ink-200 mt-3">Your weakest phase is the <b className="text-white">{worst.p}</b>. {worst.p === 'opening' ? 'Drill your openings in Train.' : worst.p === 'endgame' ? 'The endgame trainer in Train is built for this.' : 'Tactics puzzles and Visualize train exactly this.'}</p>}
           </section>
+
+          {stats.clock.games > 0 && (
+            <section className="panel panel-pad">
+              <div className="h-sec mb-1">Time pressure</div>
+              <p className="text-sm text-ink-300 mb-3">Your moves in {stats.clock.games} timed game{stats.clock.games === 1 ? '' : 's'}, by how long you thought and how much clock you had. Mistakes = mistake, miss or blunder.</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                {[['How long you thought', stats.clock.spent], ['Clock left', stats.clock.left]].map(([title, bins]) => (
+                  <div key={title}>
+                    <div className="text-xs font-semibold text-ink-300 mb-2">{title}</div>
+                    <div className="space-y-1.5">
+                      {bins.filter(b => b.n).map(b => (
+                        <div key={b.label} className="flex items-center gap-3 text-sm">
+                          <span className="w-28 shrink-0 text-white">{b.label}</span>
+                          <span className="bar flex-1"><i style={{ width: `${Math.min(100, (b.bad / b.n) * 300)}%`, background: b.bad / b.n > 0.25 ? '#f43f5e' : b.bad / b.n > 0.12 ? '#facc15' : '#34d399' }} /></span>
+                          <span className="text-xs text-ink-300 num w-32 text-right shrink-0">{Math.round((b.bad / b.n) * 100)}% mistakes · {b.n} moves</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {(() => { const fast = stats.clock.spent[0]; const slow = stats.clock.spent[3]; const low = stats.clock.left[0]; const r = (b) => (b.n >= 10 ? b.bad / b.n : null);
+                if (r(fast) != null && r(slow) != null && r(fast) > 1.5 * r(slow)) return <p className="text-sm text-ink-200 mt-3">Moves played in under 3 seconds go wrong {Math.round(r(fast) * 100)}% of the time against {Math.round(r(slow) * 100)}% when you take your time. The blunder check in Play is built for this: let it stop you.</p>;
+                if (r(low) != null && r(low) > 0.3) return <p className="text-sm text-ink-200 mt-3">Under 30 seconds on the clock, {Math.round(r(low) * 100)}% of your moves are mistakes. Play 10-minute games rather than shorter ones, and simplify when you're ahead on the clock.</p>;
+                return null; })()}
+            </section>
+          )}
 
           <section className="panel panel-pad">
             <div className="h-sec mb-3">Openings</div>
@@ -259,18 +272,20 @@ function MomentList({ title, empty, list }) {
   );
 }
 
-function LevelChart({ values }) {
-  if (values.length < 2) return <div className="text-sm text-ink-400">Needs three or more reviewed games.</div>;
+function LevelChart({ values, band = 0 }) {
+  if (values.length < 2) return <div className="text-sm text-ink-400">Needs three or more full-engine reviews.</div>;
   const W = 600, H = 120;
-  const lo = Math.floor((Math.min(...values) - 100) / 100) * 100, hi = Math.ceil((Math.max(...values) + 100) / 100) * 100;
+  const lo = Math.floor((Math.min(...values) - band - 100) / 100) * 100, hi = Math.ceil((Math.max(...values) + band + 100) / 100) * 100;
   const x = (i) => (i / (values.length - 1)) * W;
   const y = (v) => H - ((v - lo) / (hi - lo)) * H;
+  const area = band ? `${values.map((v, i) => `${x(i)},${y(v + band)}`).join(' ')} ${values.map((v, i) => `${x(i)},${y(v - band)}`).reverse().join(' ')}` : null;
   return (
     <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: H }}>
+        {area && <polygon points={area} fill="#60a5fa" opacity="0.15" />}
         <polyline points={values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
-      <div className="flex justify-between text-[11px] text-ink-400 num mt-1"><span>{lo}–{hi}</span><span>now {values[values.length - 1]}</span></div>
+      <div className="flex justify-between text-[11px] text-ink-400 num mt-1"><span>{lo}–{hi}</span><span>now {values[values.length - 1]}{band ? ` ± ${band}` : ''}</span></div>
     </div>
   );
 }

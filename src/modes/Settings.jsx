@@ -11,12 +11,16 @@ import { KEYS, load, save } from '../lib/store.js';
 import Board from '../ui/Board.jsx';
 import { engine } from '../engine/engine.js';
 import { Spinner } from '../ui/kit.jsx';
+import { sync, resetSync, syncState, subscribeSync } from '../lib/sync.js';
+import { useSyncExternalStore } from 'react';
 
 export default function Settings() {
   const [prefs, setPrefs] = usePrefs();
   const st = useEngineStatus();
   const [confirm, setConfirm] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const syncInfo = useSyncExternalStore(subscribeSync, syncState);
 
   function exportData() {
     const data = Object.fromEntries(Object.values(KEYS).map(k => [k, load(k, null)]));
@@ -89,7 +93,9 @@ export default function Settings() {
           Running: <b className="text-white">{st.flavor ? FLAVOR_NAME[st.flavor] : 'starting…'}</b>{st.threads > 1 ? `, ${st.threads} threads` : ''}.
           {st.loading && <span className="text-amber-300"> Downloading the full network (about 75 MB, once)…</span>}
           {st.error && <span className="text-rose-300"> {st.error}</span>}
+          {st.error && prefs.engine === 'full' && <button className="btn btn-sm ml-2" onClick={() => engine.setPref('full')}>Try again</button>}
         </div>
+        {!st.flavor?.startsWith('full') && prefs.engine === 'full' && !st.loading && <p className="text-xs text-amber-200">Reviews made on the lite network are marked "rough" and don't count toward your level; they are re-reviewed when the full engine is available.</p>}
         <Seg value={prefs.engine} onChange={(v) => setPrefs({ engine: v })} options={[['full', 'Full strength'], ['lite', 'Lite (small download)']]} />
         <EngineCheck />
         <p className="text-xs text-ink-400">
@@ -106,10 +112,28 @@ export default function Settings() {
 
       <section className="panel panel-pad space-y-3">
         <div className="h-sec">Your accounts</div>
-        <p className="text-xs text-ink-400">Used to fetch your games and to know which side you played. Public data only.</p>
+        <p className="text-xs text-ink-400">Used to fetch your games and to know which side you played. Public data only; nothing leaves this device.</p>
         <div className="grid sm:grid-cols-2 gap-3">
-          <label className="text-sm text-ink-200">chess.com<input type="text" className="w-full mt-1" value={prefs.chesscom} onChange={(e) => setPrefs({ chesscom: e.target.value.trim() })} autoCapitalize="none" autoCorrect="off" /></label>
+          <label className="text-sm text-ink-200">chess.com<input type="text" className="w-full mt-1" value={prefs.chesscom} onChange={(e) => { setPrefs({ chesscom: e.target.value.trim() }); }} autoCapitalize="none" autoCorrect="off" /></label>
           <label className="text-sm text-ink-200">Lichess<input type="text" className="w-full mt-1" value={prefs.lichess} onChange={(e) => setPrefs({ lichess: e.target.value.trim() })} autoCapitalize="none" autoCorrect="off" /></label>
+        </div>
+        <div className="h-sec pt-2">chess.com sync</div>
+        <Toggle on={prefs.syncAuto} onChange={(v) => setPrefs({ syncAuto: v })} label="Fetch new games when the app opens" sub="New games are imported and queued for review in the background. A web app can't do this while it is closed, so reviews happen while you use the app." />
+        <div>
+          <div className="text-sm font-semibold text-white mb-2">Which games</div>
+          <div className="flex flex-wrap gap-2">
+            {[['rapid', 'Rapid'], ['blitz', 'Blitz'], ['bullet', 'Bullet'], ['daily', 'Daily']].map(([k, label]) => {
+              const on = (prefs.syncClasses || []).includes(k);
+              return <button key={k} className={`btn btn-sm ${on ? 'on' : ''}`} onClick={() => setPrefs({ syncClasses: on ? prefs.syncClasses.filter(x => x !== k) : [...(prefs.syncClasses || []), k] })}>{label}</button>;
+            })}
+          </div>
+          <p className="text-xs text-ink-400 mt-1.5">Bullet games teach little in review; rapid is where the lessons apply.</p>
+        </div>
+        <Toggle on={prefs.wakeLock} onChange={(v) => setPrefs({ wakeLock: v })} label="Keep the screen on while reviewing" sub="For a long queue: the iPad won't sleep until the reviews are done." />
+        <div className="flex gap-2 flex-wrap items-center">
+          <button className="btn btn-sm" disabled={!prefs.chesscom || syncBusy} onClick={async () => { setSyncBusy(true); const r = await sync({ manual: true }); setSyncBusy(false); setMsg(r.error ? `Sync: ${r.error}` : `Sync: ${r.added} new game${r.added === 1 ? '' : 's'}.`); }}>{syncBusy ? <Spinner size={12} /> : null}Sync now</button>
+          <button className="btn btn-sm btn-quiet" onClick={() => { resetSync(); setMsg('Sync will start over from this month next time.'); }}>Start sync over</button>
+          <span className="text-xs text-ink-400">{syncInfo?.lastRun ? `Last checked ${new Date(syncInfo.lastRun).toLocaleString()}` : 'Not synced yet.'}</span>
         </div>
       </section>
 

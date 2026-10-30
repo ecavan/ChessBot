@@ -2,16 +2,17 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { loadCourses, loadCourse, courseStats } from '../lib/repertoire.js';
 import { load } from '../lib/store.js';
-import { progress, dueReviews, today } from '../lib/puzzles.js';
+import { progress, dueReviews, dueMine, mineCount, today } from '../lib/puzzles.js';
 import { allGames, subscribeGames } from '../lib/games.js';
 import { botById } from '../engine/bots.js';
 import { href } from '../lib/router.js';
 import { GameRow } from './Review.jsx';
-import { levelFrom } from '../lib/review.js';
 import { rowsFromGames } from '../lib/plan.js';
 import PlanCard from './PlanCard.jsx';
+import QueueCard from './QueueCard.jsx';
 import { lessonDone } from './Lessons.jsx';
 import { LESSONS } from '../data/lessons.js';
+import { levelStats } from '../lib/review.js';
 
 export default function Home() {
   const games = useSyncExternalStore(subscribeGames, allGames);
@@ -26,11 +27,14 @@ export default function Home() {
   const cur = load('chess.current.v2', null);
   const inGame = cur && !cur.over && cur.uci.length > 0;
   const pr = progress();
-  const due = dueReviews().length;
+  const dueP = dueReviews().length, dueM = dueMine().length;
+  const due = dueP + dueM;
   const daily = pr.daily[today()];
   const mine = games.filter(g => g.you && g.review?.summary);
   const accs = mine.slice(0, 10).map(g => g.review.summary.acc[g.you]).filter(x => x != null);
-  const level = levelFrom(mine.slice(0, 10).map(g => g.review.summary.est?.[g.you] ?? null));
+  // the level only counts full-network reviews: lite ones are rough
+  const lv = levelStats(mine.filter(g => g.review.flavor?.startsWith('full')).slice(0, 10).map(g => g.review.summary.est?.[g.you] ?? null));
+  const level = lv?.level ?? null;
   const avgAcc = accs.length ? accs.reduce((a, b) => a + b, 0) / accs.length : null;
   const bot = cur ? botById(cur.botId) : null;
   const lessonsDone = LESSONS.filter(l => lessonDone(l.id)).length;
@@ -46,18 +50,19 @@ export default function Home() {
         <a href={href('/puzzles/solve', { mode: 'daily' })} className="card-link !p-6">
           <div className="h-sec">Daily puzzle</div>
           <div className="text-2xl font-semibold text-white mt-2">{daily ? (daily.ok ? 'Solved ✓' : 'Missed. Try again?') : 'Ready for you'}</div>
-          <div className="text-sm text-ink-300 mt-1">A new one every day, rated 1500–2100.</div>
+          <div className="text-sm text-ink-300 mt-1">A new one every day, a notch above your puzzle rating.</div>
           <span className="btn mt-4">{daily ? 'Open' : 'Solve'}</span>
         </a>
       </div>
 
+      <QueueCard compact />
       <PlanCard rows={rowsFromGames(games)} compact />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Puzzle rating</div><div className="v">{pr.ratings.rated}</div><div className="s">streak {pr.streak} · best {pr.best}</div></a>
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Visualize</div><div className="v">{pr.ratings.visual}</div><div className="s">{pr.plays.visual} played</div></a>
-        <a href={due ? href('/puzzles/solve', { mode: 'review' }) : '#/puzzles'} className="stat hover:border-ink-500 transition"><div className="k">Mistakes to review</div><div className="v">{due}</div><div className="s">{pr.queue.length} in the queue</div></a>
-        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `level ${level} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
+        <a href={dueM ? href('/puzzles/solve', { mode: 'mine' }) : dueP ? href('/puzzles/solve', { mode: 'review' }) : '#/puzzles'} className="stat hover:border-ink-500 transition"><div className="k">Mistakes to review</div><div className="v">{due}</div><div className="s">{dueM ? `${dueM} from your games` : `${pr.queue.length + mineCount()} in the queue`}</div></a>
+        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `level ${level} ± ${lv.se} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

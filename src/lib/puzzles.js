@@ -43,6 +43,7 @@ const fresh = () => ({
   history: [], // { id, r: puzzle rating, ok, mode, t, after }
   seen: [], // recent ids
   queue: [], // { p: puzzle, box, due }
+  mine: [], // your own mistakes as puzzles: { p, box, due, ok, tries } (see addMistakePuzzles)
   daily: {}, // 'YYYY-MM-DD' → { id, ok }
   streak: 0, best: 0,
 });
@@ -95,6 +96,67 @@ export function record(p, ok, mode) {
 export const dueReviews = () => state.queue.filter(q => q.due <= Date.now());
 export const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
+// ------------------------------------------------------------------ your own mistakes as puzzles
+
+const DAY = 86400000;
+const MINE_GAPS = [1, 3, 7, 21];
+const MINE_CAP = 300;
+
+/**
+ * Turn the mistakes of a reviewed game into puzzles: the position before the opponent's move, his
+ * move is played for you, then you must find the move you missed (or any mate). Only clear ones:
+ * a blunder, mistake or miss that cost 10+ winning-chance points, with a best move that isn't
+ * itself a long forced mate. `c` = classified(game) ({ fens, moves, cls }). Returns how many were added.
+ */
+export function addMistakePuzzles(game, c) {
+  if (!game?.you || !c) return 0;
+  const first = c.fens[0].split(' ')[1];
+  let added = 0;
+  const have = new Set(state.mine.map(m => m.p.id));
+  c.cls.forEach((x, i) => {
+    if (i === 0) return;
+    const mover = (i % 2 === 0) === (first === 'w') ? 'w' : 'b';
+    if (mover !== game.you) return;
+    if (!['blunder', 'mistake', 'miss'].includes(x.cls) || x.drop < 10 || !x.bestUci) return;
+    const id = `m:${game.id}:${i}`;
+    if (have.has(id)) return;
+    const prev = c.moves[i - 1];
+    const prevUci = prev.from + prev.to + (prev.promotion || '');
+    const opp = game.you === 'w' ? game.black : game.white;
+    const p = { id, fen: c.fens[i - 1], moves: [prevUci, x.bestUci], rating: 0, themes: [],
+      mine: { game: game.id, ply: i, opp, date: game.date, played: c.moves[i].san, cls: x.cls, drop: Math.round(x.drop), line: x.bestLine.slice(0, 6) } };
+    state.mine.push({ p, box: 0, due: Date.now(), tries: 0 });
+    have.add(id);
+    added++;
+  });
+  if (state.mine.length > MINE_CAP) state.mine = state.mine.slice(-MINE_CAP);
+  if (added) persist();
+  return added;
+}
+
+/** Your mistake puzzles due now, oldest first. */
+export const dueMine = () => state.mine.filter(m => m.due <= Date.now()).sort((a, b) => a.due - b.due);
+export const mineCount = () => state.mine.length;
+
+/** Record an attempt at one of your own mistakes: right → next box (out after four), wrong → back to tomorrow. */
+export function recordMine(p, ok) {
+  const m = state.mine.find(x => x.p.id === p.id);
+  if (!m) return;
+  m.tries = (m.tries || 0) + 1;
+  m.ok = ok;
+  if (ok) {
+    m.box++;
+    if (m.box >= MINE_GAPS.length) state.mine = state.mine.filter(x => x !== m);
+    else m.due = Date.now() + MINE_GAPS[m.box] * DAY;
+  } else { m.box = 0; m.due = Date.now() + DAY; }
+  state.history.push({ id: p.id, r: 0, ok, mode: 'mine', t: Date.now(), after: null });
+  if (state.history.length > 600) state.history = state.history.slice(-600);
+  persist();
+}
+
+/** Drop the mistake puzzles of a game (it was deleted). */
+export function dropMine(gameId) { const n = state.mine.length; state.mine = state.mine.filter(m => m.p.mine?.game !== gameId); if (state.mine.length !== n) persist(); }
+
 // ------------------------------------------------------------------ picking
 
 const seenSet = () => new Set(state.seen.slice(-3000));
@@ -127,13 +189,18 @@ export async function pick(target, opts = {}) {
   throw new Error('No puzzle found for that filter.');
 }
 
-/** The daily puzzle: the same for everyone on a given date, rating 1500–2100. */
-export async function daily() {
+/**
+ * The daily puzzle: one a day, fixed for the date, about 200 points above your puzzle rating (a
+ * stretch, not a wall). `target` defaults to that; pass a number to pin the band.
+ */
+export async function daily(target = state.ratings.rated + 200) {
   const idx = await loadIndex();
   const d = today();
   let h = 2166136261;
   for (const c of d) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
-  const bands = idx.bands.filter(b => b.min >= 1500 && b.min <= 2100);
+  const want = Math.max(600, Math.min(2300, target));
+  const sorted = [...idx.bands].sort((a, b) => Math.abs(a.min + 50 - want) - Math.abs(b.min + 50 - want));
+  const bands = sorted.slice(0, 2); // the two nearest bands; the date picks one
   const band = bands[h % bands.length];
   const rows = await loadBand(band);
   // prefer a puzzle with a bit of length

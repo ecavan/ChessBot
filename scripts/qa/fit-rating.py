@@ -20,6 +20,16 @@ for tr, te in KFold(5, shuffle=True, random_state=1).split(X):
     m = mk().fit(X[tr], y[tr], sample_weight=w[tr]); p = m.predict(X[te])
     err.append(np.average(np.abs(p - y[te]), weights=w[te]))
 mae = float(np.mean(err)); print('rapid, games:', len(y), 'weighted MAE (5-fold):', round(mae))
+# the yardstick: a model with no skill predicts the (band-weighted) mean rating for every game. With a flat
+# prior over ~2,800 points that is an MAE of about 700; the model earns its keep only well below that.
+const = np.average(y, weights=w); mae0 = float(np.average(np.abs(const - y), weights=w))
+print('constant-predictor MAE:', round(mae0), '→ the model explains', f'{100 * (1 - mae / mae0):.0f}% of the error')
+# where the skill is: MAE by 400-point band of the true rating (the middle is the hard part)
+p_all = np.zeros_like(y)
+for tr, te in KFold(5, shuffle=True, random_state=1).split(X): p_all[te] = mk().fit(X[tr], y[tr], sample_weight=w[tr]).predict(X[te])
+for lo in range(100, 2900, 400):
+    sel = (y >= lo) & (y < lo + 400)
+    if sel.sum(): print(f'  {lo}-{lo + 399}: MAE {np.mean(np.abs(p_all[sel] - y[sel])):.0f} (n={sel.sum()})')
 m = mk().fit(X, y, sample_weight=w)
 ACC = list(range(20, 101, 2)); OPP = list(range(20, 101, 5)); PL = [30, 60, 100]
 grid = [[[int(round(m.predict([[a, o, pl_]])[0] / 10) * 10) for o in OPP] for a in ACC] for pl_ in PL]

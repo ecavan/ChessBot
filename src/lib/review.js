@@ -110,11 +110,18 @@ export function classifyGame(positions, moves, isBook = () => false) {
     const white = moves[i].color === 'w';
     const pov = (cp) => (white ? cp : -cp);
     const bestCp = pov(cpOf(before.lines[0]));
-    const afterCp = pov(after.terminal != null ? after.terminal : cpOf(after.lines[0]));
+    const playedUci = moves[i].from + moves[i].to + (moves[i].promotion || '');
+    // The eval after the move: from the same search as the best move when the move was one of its
+    // two lines (so a near-best move isn't marked down by jitter between two different searches),
+    // otherwise from the next position's search.
+    let afterCp, source;
+    if (after.terminal != null) { afterCp = pov(after.terminal); source = 'terminal'; }
+    else if (before.lines[0]?.pv?.[0] === playedUci) { afterCp = bestCp; source = 'pv1'; }
+    else if (before.lines[1]?.pv?.[0] === playedUci) { afterCp = pov(cpOf(before.lines[1])); source = 'pv2'; }
+    else { afterCp = pov(cpOf(after.lines[0])); source = 'next'; }
     const wBest = winPct(bestCp), wAfter = winPct(afterCp);
     const drop = Math.max(0, wBest - wAfter);
-    const playedUci = moves[i].from + moves[i].to + (moves[i].promotion || '');
-    const isBest = before.lines[0]?.pv?.[0] === playedUci || drop <= 0.5;
+    const isBest = source === 'pv1' || drop <= 0.5;
     let cls;
     if (isBest) cls = 'best';
     else if (drop <= 2) cls = 'excellent';
@@ -124,8 +131,10 @@ export function classifyGame(positions, moves, isBook = () => false) {
     else cls = 'blunder';
     // a forced mate let go: you had mate on the board and played something else
     const hadMate = pov(before.lines[0]?.mate ?? 0) > 0;
-    const keptMate = after.terminal != null ? pov(after.terminal) > 0 : pov(after.lines[0]?.mate ?? 0) > 0;
+    const keptMate = after.terminal != null ? pov(after.terminal) > 0 : source === 'pv1' ? true : source === 'pv2' ? pov(before.lines[1]?.mate ?? 0) > 0 : pov(after.lines[0]?.mate ?? 0) > 0;
     if (hadMate && !keptMate && cls !== 'best') cls = 'miss';
+    // a slower mate is still a mate: never a mistake or blunder
+    if (hadMate && keptMate && (cls === 'mistake' || cls === 'blunder' || cls === 'inaccuracy')) cls = 'good';
     // Great: punishing his mistake (his last move cost him 15% or more) or starting the forced mate
     // he allowed, with the best move. The only legal move doesn't count.
     if (drop <= 1 && (prevDrop >= 15 || (hadMate && keptMate && prevDrop >= 5))) {
@@ -136,7 +145,7 @@ export function classifyGame(positions, moves, isBook = () => false) {
     // a sound sacrifice, played when the game wasn't already won: the best move or close to it
     if (drop <= 3 && wBest < 90 && wAfter >= 45) { try { if (isSacrifice(before.fen, moves[i], after.lines?.[0]?.pv)) cls = 'brilliant'; } catch { /* ignore */ } }
     if (isBook(after.fen) && drop <= 5 && i < 30) cls = 'book';
-    out.push({ cls, drop, acc: moveAccuracy(bestCp, afterCp), wBest, wAfter, bestUci: before.lines[0]?.pv?.[0], bestLine: before.lines[0]?.pv || [], afterLine: after.lines[0]?.pv || [] });
+    out.push({ cls, drop, acc: moveAccuracy(bestCp, afterCp), wBest, wAfter, cpBest: bestCp, cpAfter: afterCp, source, bestUci: before.lines[0]?.pv?.[0], bestLine: before.lines[0]?.pv || [], afterLine: after.lines[0]?.pv || [] });
     prevDrop = drop;
   }
   return out;
@@ -182,9 +191,20 @@ export const GAME_RATING_MAE = GAME_RATING.mae;
 
 /** Your level from recent game ratings: their average, rounded (null with fewer than 3). */
 export function levelFrom(ratings) {
+  return levelStats(ratings)?.level ?? null;
+}
+
+/**
+ * Your level with its uncertainty: { level, se, n }. One game's rating is off by MAE ≈ 490 on average
+ * (a standard deviation of about 1.25 × MAE for roughly normal errors), so the mean of n games has a
+ * standard error of about 1.25·MAE/√n: ±190 after 10 games, ±120 after 25. Null with fewer than 3.
+ */
+export function levelStats(ratings) {
   const r = ratings.filter(x => x != null);
   if (r.length < 3) return null;
-  return Math.round(r.reduce((a, b) => a + b, 0) / r.length / 50) * 50;
+  const mean = r.reduce((a, b) => a + b, 0) / r.length;
+  const sd = 1.25 * (GAME_RATING.mae || 490);
+  return { level: Math.round(mean / 50) * 50, se: Math.round(sd / Math.sqrt(r.length) / 10) * 10, n: r.length };
 }
 
 export function counts(classified, color, firstColor) {

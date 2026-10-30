@@ -21,6 +21,9 @@ import { href, go } from '../lib/router.js';
 import { moveSound } from '../lib/sound.js';
 import { NavButtons } from './Play.jsx';
 import Insights from './Insights.jsx';
+import QueueCard from './QueueCard.jsx';
+import { promote, pause, enqueue, useQueue } from '../lib/reviewQueue.js';
+import { reviewEngine } from '../lib/analyze.js';
 
 const useGames = () => useSyncExternalStore(subscribeGames, allGames);
 
@@ -54,6 +57,7 @@ function GameList() {
           <a className="btn btn-primary" href="#/review/import">Import games</a>
         </div>
       </div>
+      <QueueCard />
       <Seg value={filter} onChange={setFilter} options={[['all', 'All'], ['here', 'Played here'], ['imported', 'Imported'], ['watch', 'Bot games']]} />
       {!list.length ? (
         <div className="panel panel-pad text-center">
@@ -66,7 +70,7 @@ function GameList() {
         </div>
       )}
       {list.length > shown && <button className="btn btn-block" onClick={() => setShown(n => n + 100)}>Show more ({list.length - shown} older)</button>}
-      {pending > 0 && <p className="text-xs text-ink-400">{pending} of your games haven't been reviewed yet. Open one, or analyze them all from Insights.</p>}
+      {pending > 0 && <p className="text-xs text-ink-400">{pending} of your games haven't been reviewed yet. Open one, or press Review all above.</p>}
     </div>
   );
 }
@@ -77,6 +81,7 @@ export function GameRow({ g }) {
   const yourAcc = g.you && acc ? acc[g.you] : null;
   const opp = g.you === 'w' ? `${g.black}${g.blackElo ? ` (${g.blackElo})` : ''}` : g.you === 'b' ? `${g.white}${g.whiteElo ? ` (${g.whiteElo})` : ''}` : `${g.white} – ${g.black}`;
   const op = g.review?.summary?.opening?.name;
+  const lite = g.review?.summary && !g.review.flavor?.startsWith('full');
   return (
     <a href={href(`/review/game/${encodeURIComponent(g.id)}`)} className="row-link">
       <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${res === 'win' ? 'bg-emerald-500/20 text-emerald-300' : res === 'loss' ? 'bg-rose-500/20 text-rose-300' : 'bg-ink-700 text-ink-200'}`}>
@@ -86,7 +91,7 @@ export function GameRow({ g }) {
         <span className="block text-sm font-semibold text-white truncate">{g.you ? `vs ${opp}` : opp}</span>
         <span className="block text-xs text-ink-300 truncate">{g.date ? `${g.date.replace(/\./g, '-')} · ` : ''}{SRC[g.source] || g.source} · {Math.ceil(g.uci.length / 2)} moves{op ? ` · ${op}` : ''}</span>
       </span>
-      {yourAcc != null ? <span className="text-right shrink-0"><span className="block text-base font-semibold text-white num">{yourAcc.toFixed(1)}</span><span className="block text-[10px] uppercase tracking-wider text-ink-400">accuracy</span></span>
+      {yourAcc != null ? <span className="text-right shrink-0"><span className="block text-base font-semibold text-white num">{yourAcc.toFixed(1)}</span><span className={`block text-[10px] uppercase tracking-wider ${lite ? 'text-amber-300' : 'text-ink-400'}`}>{lite ? 'rough (lite)' : 'accuracy'}</span></span>
         : g.review && !g.review.summary ? <span className="tag">partly</span> : <span className="tag">new</span>}
     </a>
   );
@@ -187,6 +192,8 @@ function GameReview({ id, auto, startPly = null }) {
   const games = useGames();
   const game = games.find(g => g.id === id);
   const stage = useStage({ evalBar: true });
+  const q = useQueue();
+  const queued = q.progress?.id === id ? q.progress : null;
   const [ply, setPly] = useState(Number.isFinite(startPly) ? startPly : null);
   const [flip, setFlip] = useState(false);
   const [prog, setProg] = useState(null); // { done, total }
@@ -207,12 +214,14 @@ function GameReview({ id, auto, startPly = null }) {
 
   async function analyze() {
     cancelled.current = false;
+    pause(); // the background queue steps aside; this game is next for it anyway
     setProg({ done: 0, total: rep.fens.length });
     await analyzeGame(id, { ms: prefs.analysisTime, onProgress: (done, total) => setProg({ done, total }), isCancelled: () => cancelled.current });
     setProg(null);
   }
   useEffect(() => {
     if (game && !full && (auto || game.review?.partial)) analyze();
+    else if (game && !full && game.you) { enqueue([id], { front: true }); promote(id); }
     return () => { cancelled.current = true; engine.cancel(['review']); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,11 +322,17 @@ function GameReview({ id, auto, startPly = null }) {
           <Progress value={(prog.done / prog.total) * 100} />
           <div className="text-xs text-ink-400">{(prefs.analysisTime / 1000).toFixed(1)} s per position, two lines each. You can leave; it continues where it stopped.</div>
         </div>
+      ) : !full && queued ? (
+        <div className="panel panel-pad space-y-2">
+          <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Reviewing in the background</span><span className="num text-ink-300">{queued.done}/{queued.total}</span></div>
+          <Progress value={(queued.done / Math.max(1, queued.total)) * 100} />
+          <div className="text-xs text-ink-400">It carries on while you do other things here, and resumes if you leave.</div>
+        </div>
       ) : !full ? (
         <div className="panel panel-pad space-y-3">
           <div className="text-white font-semibold">{game.white} vs {game.black}</div>
-          <p className="text-sm text-ink-300">Not reviewed yet. Stockfish looks at every position (about {Math.round((fens.length * prefs.analysisTime) / 1000)} s).</p>
-          <button className="btn btn-primary btn-block" onClick={analyze}>Review this game</button>
+          <p className="text-sm text-ink-300">Not reviewed yet. Stockfish looks at every position (about {Math.round((fens.length * prefs.analysisTime) / 1000)} s).{game.you && q.pending.includes(id) ? ' It is in the review queue.' : ''}</p>
+          <button className="btn btn-primary btn-block" onClick={analyze}>Review this game now</button>
         </div>
       ) : retry ? (
         <RetryPanel retry={retry} setRetry={setRetry} cls={cls} moves={moves} fens={fens} moverOf={moverOf} setPly={setPly} />
@@ -331,7 +346,8 @@ function GameReview({ id, auto, startPly = null }) {
                 <ClsDot cls={c.cls} size={22} />
                 <span className="font-semibold text-white">{moveNo(cur - 1)} {mv.san}</span>
                 <span className="text-sm font-semibold" style={{ color: CLASSES[c.cls].color }}>{CLASSES[c.cls].label}</span>
-                <span className="ml-auto text-sm num text-ink-200">{fmtScore(posLine(cur))}</span>
+                {bad && <span className="text-xs text-ink-300 num" title="Winning chances lost compared with the best move">−{Math.round(c.drop)}% win</span>}
+                <span className="ml-auto text-sm num text-ink-200" title="Engine evaluation after this move">{fmtScore(posLine(cur))}</span>
               </div>
               {(() => {
                 const ex = explainMove(fens[cur - 1], uciOf(mv), { cls: c.cls, drop: c.drop, bestUci: c.bestUci, bestLine: c.bestLine, afterLine: c.afterLine, ply: cur - 1 });
@@ -419,8 +435,10 @@ function Strip({ game, color, sum }) {
 
 function Summary({ game, sum }) {
   const rows = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
+  const eng = reviewEngine(game);
   return (
-    <div className="panel panel-pad">
+    <div className="panel panel-pad relative">
+      {eng && <span className={`absolute top-2 right-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${eng.full ? 'text-ink-400 bg-ink-800/60' : 'text-amber-200 bg-amber-900/40'}`} title={eng.full ? `Full network, ${eng.ms} ms per position` : 'Reviewed with the lite network: the numbers are rough. Re-analyze once the full engine has loaded.'}>{eng.full ? `full · ${eng.ms ? `${(eng.ms / 1000).toFixed(1)} s` : ''}` : 'lite · rough'}</span>}
       <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3 text-center">
         <div><div className="text-[11px] uppercase tracking-wider text-ink-300 truncate">{game.white}</div><div className="text-3xl font-semibold text-white num">{sum.acc.w?.toFixed(1) ?? '–'}</div></div>
         <div className="text-[11px] uppercase tracking-wider text-ink-400 pb-2">Accuracy</div>

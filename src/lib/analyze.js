@@ -11,6 +11,7 @@ import { classifyGame, gameAccuracy, gameRating, counts } from './review.js';
 import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
+import { addMistakePuzzles } from './puzzles.js';
 
 function terminalOf(fen) {
   const g = new Chess(fen);
@@ -25,7 +26,7 @@ const slim = (l) => ({ ...(l.cp != null ? { cp: l.cp } : {}), ...(l.mate != null
  * Analyze a stored game. opts: { ms, onProgress(done, total), isCancelled() }.
  * Resolves the updated game (with .review) or null if cancelled.
  */
-export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = () => false } = {}) {
+export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = () => false, priority, tag = 'review' } = {}) {
   await loadBook();
   let game = getGame(gameId);
   if (!game) return null;
@@ -36,31 +37,55 @@ export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = 
   let done = positions.filter(Boolean).length;
   onProgress?.(done, total);
   let lastSave = Date.now();
+  const flavors = new Set(game.review?.partial ? game.review.flavors || [] : []);
+  const persistPartial = () => {
+    if (!getGame(gameId)) return;
+    game = { ...getGame(gameId), review: { ms, positions, partial: true, flavors: [...flavors] } };
+    saveGame(game);
+    lastSave = Date.now();
+  };
   for (let i = fens.length - 1; i >= 0; i--) {
     if (positions[i]) continue;
-    if (isCancelled()) return null;
+    if (isCancelled()) { persistPartial(); return null; }
     const term = terminalOf(fens[i]);
     if (term != null) positions[i] = { lines: [], terminal: term };
     else {
-      const r = await engine.search({ fen: fens[i], movetime: ms, multipv: 2, tag: 'review' });
-      if (!r || isCancelled()) return null;
+      let r;
+      for (;;) {
+        r = await engine.search({ fen: fens[i], movetime: ms, multipv: 2, tag, priority });
+        if (!r || isCancelled()) { persistPartial(); return null; }
+        if (!r.yielded) break;
+        // a background review stepped aside for a live search: let that finish, then search again
+        await engine.whenIdle();
+        if (isCancelled()) { persistPartial(); return null; }
+      }
       positions[i] = { lines: r.lines.slice(0, 2).map(slim) };
+      if (r.flavor) flavors.add(r.flavor);
     }
     done++;
     onProgress?.(done, total);
     if (!getGame(gameId)) return null; // deleted meanwhile
-    if (Date.now() - lastSave > 4000) {
-      game = { ...getGame(gameId), review: { ms, positions, partial: true } };
-      saveGame(game);
-      lastSave = Date.now();
-    }
+    if (Date.now() - lastSave > 4000) persistPartial();
   }
   if (!getGame(gameId)) return null;
-  const review = { ms, positions, flavor: engine.status.flavor, at: Date.now() };
+  const fl = [...flavors];
+  // the weakest network that took part is what the review is worth
+  const flavor = fl.some(f => f.startsWith('lite')) ? fl.find(f => f.startsWith('lite')) : fl[0] || engine.status.flavor;
+  const review = { ms, positions, flavor, at: Date.now() };
   review.summary = summarize(getGame(gameId), review);
   game = { ...getGame(gameId), review };
   saveGame(game);
+  // your mistakes become puzzles for the "Your mistakes" queue (full-network reviews only: lite ones are rough)
+  if (game.you && flavor?.startsWith('full')) { try { addMistakePuzzles(game, classified(game)); } catch { /* not vital */ } }
   return game;
+}
+
+/** Which engine a review was made with: { flavor, full: bool, ms } (full = the complete network). */
+export function reviewEngine(game) {
+  const r = game?.review;
+  if (!r?.summary) return null;
+  const flavor = r.summary.engine?.flavor || r.flavor || null;
+  return { flavor, full: !!flavor?.startsWith('full'), ms: r.summary.engine?.ms ?? r.ms, threads: r.summary.engine?.threads };
 }
 
 /** Classify moves of an analyzed game. */
@@ -86,12 +111,14 @@ export function summarize(game, review) {
     opening: openingOf(fens),
     // your mistakes by kind (lesson id), for the weekly plan
     kinds: game.you ? kindsOf({ fens, moves, positions: pos, cls }, game.you) : null,
+    // what produced the numbers: a lite-network review is a rough one
+    engine: { flavor: review.flavor || null, ms: review.ms, threads: review.threads },
     v: SUMMARY_V,
   };
 }
 
 /** Bumped when the classification, accuracy or game rating changes: older summaries are redone. */
-export const SUMMARY_V = 3;
+export const SUMMARY_V = 4;
 
 /** Redo the summaries of reviewed games from an older version (cheap: no engine needed). */
 export async function refreshSummaries() {
@@ -99,5 +126,9 @@ export async function refreshSummaries() {
   for (const g of allGames()) {
     if (!g.review?.summary || g.review.summary.v === SUMMARY_V || g.review.partial) continue;
     try { saveGame({ ...g, review: { ...g.review, summary: summarize(g, g.review) } }); } catch { /* leave it */ }
+  }
+  // the mistake-puzzle queue catches up on games reviewed before it existed (recent ones; ids dedupe)
+  for (const g of allGames().filter(x => x.you && x.review?.summary && x.review.flavor?.startsWith('full')).slice(0, 60)) {
+    try { addMistakePuzzles(g, classified(g)); } catch { /* skip */ }
   }
 }

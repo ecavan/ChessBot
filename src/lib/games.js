@@ -13,6 +13,7 @@
 import { Chess } from 'chess.js';
 import { load, save, KEYS } from './store.js';
 import { START, uciOf, parsePgn, splitPgns, toPgn } from './chessutil.js';
+import { dropMine } from './puzzles.js';
 
 let games = load(KEYS.games, []);
 const subs = new Set();
@@ -56,8 +57,8 @@ export function saveGame(g) {
   persist();
   return g;
 }
-export function deleteGame(id) { games = games.filter(g => g.id !== id); persist(); }
-export function clearGames() { games = []; persist(); }
+export function deleteGame(id) { games = games.filter(g => g.id !== id); persist(); dropMine(id); }
+export function clearGames() { const ids = games.map(g => g.id); games = []; persist(); ids.forEach(dropMine); }
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const today = () => new Date().toISOString().slice(0, 10).replace(/-/g, '.');
@@ -84,7 +85,9 @@ function fromPgn(text, source, me = []) {
   if (/^\d{4}-\d\d-\d\d$/.test(d)) { const x = Date.parse(`${d}T${t}Z`); if (!Number.isNaN(x)) at = x; }
   const how = headers.Termination || '';
   const link = headers.Link || (headers.Site?.startsWith('http') ? headers.Site : null);
+  const clocks = clocksOf(text, moves.length);
   return {
+    ...(clocks ? { clocks } : {}),
     id: link ? `u:${link}` : `p:${hash(moves.map(uciOf).join(' ') + white + black + d)}`,
     source, at, date: headers.Date && !headers.Date.includes('?') ? headers.Date : (headers.UTCDate && !headers.UTCDate.includes('?') ? headers.UTCDate : ''), white, black,
     whiteElo: headers.WhiteElo ? Number(headers.WhiteElo) || undefined : undefined,
@@ -94,6 +97,34 @@ function fromPgn(text, source, me = []) {
     url: link || undefined,
     timeControl: headers.TimeControl, event: headers.Event,
   };
+}
+
+/**
+ * Clock readings after each move, in seconds, from `{[%clk 0:09:51.2]}` comments (chess.com and
+ * Lichess both write them). null when the PGN has none or the count doesn't match the moves.
+ */
+export function clocksOf(text, nMoves) {
+  const body = text.replace(/^\[.*\]\s*$/gm, '');
+  const out = [];
+  for (const m of body.matchAll(/\[%clk\s+(\d+):(\d\d):(\d\d(?:\.\d+)?)\]/g)) out.push(Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]));
+  return out.length && out.length === nMoves ? out : null;
+}
+
+/** Seconds spent on each move by `side` ('w' | 'b'), from the clocks and the time control ("600+5"). */
+export function timeSpent(game, side) {
+  if (!game.clocks) return null;
+  const inc = Number((game.timeControl || '').split('+')[1] || 0);
+  const base = Number((game.timeControl || '').split('+')[0]);
+  const first = (game.startFen || START).split(' ')[1];
+  const out = [];
+  let prev = Number.isFinite(base) && base > 0 ? base : null;
+  game.clocks.forEach((c, i) => {
+    const mover = (i % 2 === 0) === (first === 'w') ? 'w' : 'b';
+    if (mover !== side) return;
+    out.push({ i, left: c, spent: prev == null ? null : Math.max(0, prev + inc - c) });
+    prev = c;
+  });
+  return out;
 }
 
 function hash(s) {
@@ -117,7 +148,7 @@ export function importPgnText(text, source = 'import', me = []) {
   games.sort((a, b) => b.at - a.at);
   persist();
   const kept = new Set(games.map(g => g.id));
-  const stayed = out.filter(g => kept.has(g.id));
+  const stayed = out.filter(g => kept.has(g.id)).sort((a, b) => b.at - a.at);
   return { added: stayed.length, dropped: out.length - stayed.length, skipped, errors, games: stayed };
 }
 
@@ -138,6 +169,45 @@ export async function fetchChessCom(user, months = 1) {
     for (const g of gs) if (g.pgn && (g.rules || 'chess') === 'chess') text += g.pgn.trim() + '\n\n';
   }
   return importPgnText(text, 'chesscom', [user]);
+}
+
+/** chess.com time-control classes, from the API's time_class field. */
+export const TIME_CLASSES = ['rapid', 'blitz', 'bullet', 'daily'];
+
+/**
+ * One month of a player's chess.com archive, with an ETag so an unchanged month costs one cheap
+ * request. Returns { games: [raw API games], etag, notModified, status }. `games` is empty for a
+ * month that doesn't exist yet (404) and when nothing changed.
+ */
+export async function fetchChessComMonth(user, year, month, etag = null) {
+  const u = user.trim().toLowerCase();
+  const url = `https://api.chess.com/pub/player/${encodeURIComponent(u)}/games/${year}/${String(month).padStart(2, '0')}`;
+  const r = await fetch(url, { headers: etag ? { 'If-None-Match': etag } : {} });
+  if (r.status === 304) return { games: [], etag, notModified: true, status: 304 };
+  if (r.status === 404) return { games: [], etag: null, notModified: false, status: 404 };
+  if (r.status === 429) { const e = new Error('chess.com is rate-limiting; try again in a minute.'); e.status = 429; throw e; }
+  if (!r.ok) { const e = new Error('chess.com did not answer. Try again in a minute.'); e.status = r.status; throw e; }
+  const { games: gs = [] } = await r.json();
+  return { games: gs, etag: r.headers.get('ETag') || null, notModified: false, status: 200 };
+}
+
+/**
+ * Import raw chess.com API games (as fetchChessComMonth returns them) that pass the filter:
+ * finished, standard rules, in `timeClasses`, and newer than `after` (unix seconds). Returns
+ * importPgnText's result plus `newest`, the latest end_time seen.
+ */
+export function importChessComGames(gs, user, { timeClasses = ['rapid', 'blitz'], after = 0 } = {}) {
+  let text = '';
+  let newest = after;
+  for (const g of gs) {
+    if (!g.pgn || (g.rules || 'chess') !== 'chess' || !g.end_time) continue;
+    if (!timeClasses.includes(g.time_class)) continue;
+    if (g.end_time <= after) continue;
+    newest = Math.max(newest, g.end_time);
+    text += g.pgn.trim() + '\n\n';
+  }
+  const res = text ? importPgnText(text, 'chesscom', [user]) : { added: 0, dropped: 0, skipped: 0, errors: [], games: [] };
+  return { ...res, newest };
 }
 
 /** Recent games from Lichess (public API). */

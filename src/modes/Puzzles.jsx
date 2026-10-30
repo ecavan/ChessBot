@@ -7,8 +7,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, Seg, Spinner } from '../ui/kit.jsx';
-import { pick, daily, record, progress, dueReviews, today, themeName, THEME_GROUPS, loadIndex } from '../lib/puzzles.js';
-import { playUci, uciOf } from '../lib/chessutil.js';
+import { pick, daily, record, progress, dueReviews, today, themeName, THEME_GROUPS, loadIndex, dueMine, mineCount, recordMine } from '../lib/puzzles.js';
+import { playUci, uciOf, lineSan } from '../lib/chessutil.js';
 import { moveSound, sfx } from '../lib/sound.js';
 import { usePrefs } from '../lib/prefs.js';
 import { href, go } from '../lib/router.js';
@@ -36,6 +36,7 @@ function Hub() {
   const [prefs, setPrefs] = usePrefs();
   const pr = progress();
   const due = dueReviews();
+  const mine = dueMine();
   const hist = pr.history.filter(h => h.mode === 'rated' || h.mode === 'theme');
   const last = hist.slice(-50);
   const solvedPct = last.length ? Math.round((last.filter(h => h.ok).length / last.length) * 100) : null;
@@ -77,6 +78,15 @@ function Hub() {
         </div>
       </div>
 
+      <a href={mine.length ? href('/puzzles/solve', { mode: 'mine' }) : undefined} className={`card-link flex items-center justify-between gap-4 ${mine.length ? '!border-rose-800/60' : 'opacity-70'}`}>
+        <div>
+          <div className="h-sec !text-rose-300">Your mistakes · from your games</div>
+          <div className="text-white font-semibold mt-1">{mine.length ? `${mine.length} to find again` : mineCount() ? `${mineCount()} scheduled, none due` : 'Review a game and its blunders land here'}</div>
+          <div className="text-sm text-ink-300 mt-0.5">The move you missed, from the position you had. Back in 1, 3, 7 and 21 days until you find it four times.</div>
+        </div>
+        {mine.length > 0 && <span className="btn btn-primary">Solve</span>}
+      </a>
+
       <a href={href('/puzzles/solve', { mode: 'visual' })} className="card-link flex items-center justify-between gap-4">
         <div>
           <div className="h-sec !text-sky-300">Visualize · calculation training</div>
@@ -105,7 +115,7 @@ function Hub() {
 
 // ------------------------------------------------------------------ solver
 
-const MODE_LABEL = { rated: 'Rated', theme: 'Theme', daily: 'Daily puzzle', review: 'Review', visual: 'Visualize', free: 'Puzzle' };
+const MODE_LABEL = { rated: 'Rated', theme: 'Theme', daily: 'Daily puzzle', review: 'Review', visual: 'Visualize', free: 'Puzzle', mine: 'Your mistakes' };
 
 function Solver({ mode, theme, id }) {
   const [prefs] = usePrefs();
@@ -138,6 +148,7 @@ function Solver({ mode, theme, id }) {
       let q;
       if (mode === 'daily') q = await daily();
       else if (mode === 'review') { const d = dueReviews(); if (!d.length) { go('/puzzles'); return; } q = d[0].p; }
+      else if (mode === 'mine') { const d = dueMine(); if (!d.length) { go('/puzzles'); return; } q = d[0].p; }
       else if (visual) q = await pick(pr.ratings.visual + prefs.puzzleDifficulty, { minPlies: 2 + depth * 2, maxPlies: 4 + depth * 2 });
       else q = await pick(pr.ratings.rated + prefs.puzzleDifficulty, { theme: mode === 'theme' ? theme : undefined });
       // today's daily, already solved: replaying it doesn't count again (streak, review queue)
@@ -166,8 +177,9 @@ function Solver({ mode, theme, id }) {
   const displayFen = !p ? null : wrongMove?.fen || altMate?.fen || lineFens[k];
   const logicFen = !p ? null : inVisual ? lineFens[visualTarget] : wrongMove?.fen || lineFens[k];
 
+  const score = (ok) => (mode === 'mine' ? (recordMine(p, ok), 0) : record(p, ok, mode));
   function fail() {
-    if (!recorded.current && p) { recorded.current = true; setDelta(record(p, false, mode)); }
+    if (!recorded.current && p) { recorded.current = true; setDelta(score(false)); }
     setFailed(true);
   }
 
@@ -210,7 +222,7 @@ function Solver({ mode, theme, id }) {
     if (reached >= p.moves.length || mate) {
       setK(reached);
       setStatus('solved');
-      if (!recorded.current) { recorded.current = true; setDelta(record(p, !failed && hint === 0, mode)); }
+      if (!recorded.current) { recorded.current = true; setDelta(score(!failed && hint === 0)); }
       sfx.good();
       return;
     }
@@ -281,8 +293,14 @@ function Solver({ mode, theme, id }) {
                 <div className="text-sm text-ink-200 mt-2">Now play your next move from the position in your head (tap the squares; the board hasn't moved).</div>
               </div>
             )}
+            {p?.mine && status !== 'loading' && (
+              <div className="text-xs text-ink-300">From your game vs <b className="text-white">{p.mine.opp}</b>{p.mine.date ? ` · ${p.mine.date}` : ''} · move {Math.ceil((p.mine.ply + 1) / 2)}. {done ? <>You played <b className="text-white">{p.mine.played}</b> ({p.mine.cls}, −{p.mine.drop}% win). <a className="underline" href={href(`/review/game/${encodeURIComponent(p.mine.game)}`, { ply: p.mine.ply + 1 })}>Open the review</a>.</> : 'Find what you missed.'}</div>
+            )}
             <StatusCard status={status} p={p} delta={delta} failed={failed} hint={hint} mode={mode} you={you} />
-            {p && done && (
+            {p && done && (status === 'failed' || failed || hint > 0) && lineFens[1] && (
+              <div className="text-sm text-ink-200"><span className="text-emerald-300 font-semibold">The line</span> {lineSan(lineFens[1], p.mine?.line?.length ? p.mine.line : p.moves.slice(1), 8)}</div>
+            )}
+            {p && done && !p.mine && (
               <div className="flex flex-wrap gap-1.5">
                 <span className="tag">Rating {p.rating}</span>
                 {p.themes.filter(t => !['short', 'long', 'veryLong', 'oneMove', 'master', 'masterVsMaster', 'superGM', 'crushing', 'advantage', 'equality'].includes(t)).slice(0, 5).map(t => <span key={t} className="tag !normal-case">{themeName(t)}</span>)}
@@ -309,7 +327,7 @@ function Solver({ mode, theme, id }) {
           )}
         </div>
       )}
-      {p && done && <div className="text-xs text-ink-400 px-1">Puzzle {p.id} · <a className="underline" href={`https://lichess.org/training/${p.id}`} target="_blank" rel="noreferrer">open on Lichess</a></div>}
+      {p && done && !p.mine && <div className="text-xs text-ink-400 px-1">Puzzle {p.id} · <a className="underline" href={`https://lichess.org/training/${p.id}`} target="_blank" rel="noreferrer">open on Lichess</a></div>}
       <a href="#/puzzles" className="btn btn-quiet btn-sm self-start">← All puzzle modes</a>
     </Stage>
   );
@@ -322,7 +340,7 @@ function StatusCard({ status, p, delta, failed, hint, mode, you }) {
     return (
       <div className={`verdict ${failed || hint ? 'v-info' : 'v-good'} pop`}>
         <div className="text-lg font-semibold text-white">{failed || hint ? 'Solved, with help' : 'Solved!'}{d}</div>
-        <div className="text-sm text-ink-200">{failed || hint ? (mode === 'rated' || mode === 'theme' || mode === 'visual' ? 'Counted as a miss. It will come back for review.' : 'It will come back for review.') : mode === 'review' ? 'Nice. It moves to a longer interval.' : 'Clean solve.'}</div>
+        <div className="text-sm text-ink-200">{failed || hint ? (mode === 'rated' || mode === 'theme' || mode === 'visual' ? 'Counted as a miss. It will come back for review.' : 'It will come back for review.') : mode === 'review' || mode === 'mine' ? 'Nice. It moves to a longer interval.' : 'Clean solve.'}</div>
       </div>
     );
   }

@@ -13,12 +13,16 @@ export const DEFAULT_PREFS = {
   analysisTime: 800, // ms per position in game review
   playEval: false,
   playThreats: false,
-  playGuard: false,
+  playGuard: true, // the blunder check: the one assist that trains the habit, so on by default
   playHints: true,
   playCoach: true,
   chesscom: '',
   lichess: '',
   puzzleDifficulty: 0, // −300 easier … +300 harder
+  syncAuto: true, // fetch new chess.com games when the app opens
+  syncClasses: ['rapid', 'blitz'], // which time classes to pull in
+  syncBackfillMonths: 1,
+  wakeLock: false, // keep the screen on while the review queue works
 };
 
 let prefs = load(KEYS.prefs, DEFAULT_PREFS);

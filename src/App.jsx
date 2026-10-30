@@ -5,6 +5,9 @@ import { engine, FLAVOR_NAME } from './engine/engine.js';
 import { useEngineStatus } from './engine/useEngine.js';
 import { loadBook } from './lib/book.js';
 import { refreshSummaries } from './lib/analyze.js';
+import { sync } from './lib/sync.js';
+import { run as runQueue, enqueueUnreviewed } from './lib/reviewQueue.js';
+import { allGames } from './lib/games.js';
 import { Spinner } from './ui/kit.jsx';
 import Home from './modes/Home.jsx';
 import Play from './modes/Play.jsx';
@@ -26,7 +29,17 @@ const TABS = [
 export default function App() {
   const route = useRoute();
   const [prefs] = usePrefs();
-  useEffect(() => { engine.start(prefs.engine); refreshSummaries().catch(() => {}); try { navigator.storage?.persist?.(); } catch { /* not supported */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    engine.start(prefs.engine);
+    refreshSummaries().catch(() => {}).then(() => {
+      // catch up: new chess.com games, then review everything of yours that is still unreviewed
+      if (prefs.syncAuto && prefs.chesscom) {
+        sync().catch(() => {}).then(() => { if (allGames().some(g => g.source === 'chesscom' && g.you && !g.review?.summary)) enqueueUnreviewed(); });
+      }
+      runQueue();
+    });
+    try { navigator.storage?.persist?.(); } catch { /* not supported */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: light)');
     const apply = () => {
@@ -85,7 +98,7 @@ function EnginePill() {
     <a href={href('/settings')} className="pill !py-1.5 hidden sm:inline-flex" title={st.flavor ? FLAVOR_NAME[st.flavor] : 'Starting engine'}>
       {st.loading ? <Spinner size={12} /> : <span className={`w-2 h-2 rounded-full ${st.error ? 'bg-rose-500' : full ? 'bg-emerald-400' : 'bg-amber-400'}`} />}
       <span>SF 17.1</span>
-      <span className="text-ink-300 font-medium">{st.loading && !full ? 'loading full…' : full ? `full${st.threads > 1 ? ` · ${st.threads} threads` : ''}` : st.flavor ? 'lite' : '…'}</span>
+      <span className="text-ink-300 font-medium">{st.loading && !full ? 'loading full…' : full ? `full${st.threads > 1 ? ` · ${st.threads} threads` : ''}` : st.flavor ? (st.error ? 'lite · full failed' : 'lite') : '…'}</span>
     </a>
   );
 }

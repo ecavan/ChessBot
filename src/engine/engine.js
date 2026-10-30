@@ -59,7 +59,8 @@ class Worker1 {
   }
   async init() {
     this.w.onerror = (e) => { this.dead = true; for (const l of [...this.listeners]) l('__error__ ' + (e.message || 'worker error')); };
-    const ok = this.waitFor(l => l === 'uciok' || l.startsWith('__error__'), 180000);
+    // the full network is ~75 MB; on a slow link or a cold cache this takes minutes, so wait generously
+    const ok = this.waitFor(l => l === 'uciok' || l.startsWith('__error__'), this.flavor.startsWith('full') ? 600000 : 180000);
     this.send('uci');
     const r = await ok;
     if (r.startsWith('__error__')) throw new Error(r);
@@ -80,14 +81,36 @@ class EngineManager {
     this.status = { flavor: null, threads: 0, loading: null, error: null };
     this.subs = new Set();
     this.opts = {}; // last options sent, to avoid resending
+    this.fullTried = 0;
   }
   subscribe(fn) { this.subs.add(fn); fn(this.status); return () => this.subs.delete(fn); }
   emit() { for (const f of this.subs) f(this.status); }
+
+  /** The flavour currently answering searches ('full-mt', 'lite-single', …) or null before start. */
+  flavor() { return this.worker?.flavor || null; }
+  isFull() { return !!this.worker?.flavor?.startsWith('full'); }
+  /** Resolves once the full network is running, or when it has given up (error) — never rejects. */
+  whenFull(timeoutMs = 240000) {
+    if (this.isFull()) return Promise.resolve(true);
+    if (!this.started || this.status.error || this.pref === 'lite') return Promise.resolve(this.isFull());
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { off(); resolve(this.isFull()); }, timeoutMs);
+      const off = this.subscribe((s) => { if (s.flavor?.startsWith('full') || s.error) { clearTimeout(t); off(); resolve(this.isFull()); } });
+    });
+  }
+  /** Resolves when nothing is running and nothing is queued. */
+  whenIdle() {
+    if (!this.running && !this.queue.length) return Promise.resolve();
+    return new Promise((resolve) => { this.idleWaiters = this.idleWaiters || []; this.idleWaiters.push(resolve); });
+  }
+  /** True while a job tagged `tag` runs or waits. */
+  busyWith(tag) { return this.running?.job.tag === tag || this.queue.some(q => q.job.tag === tag); }
 
   /** Start: lite now, full in the background (unless the saved preference is lite). */
   async start(pref = 'full') {
     if (this.started) return this.ready;
     this.started = true;
+    this.pref = pref;
     const mt = canThread();
     const lite = new Worker1(mt ? 'lite-mt' : 'lite-single');
     this.ready = lite.init().then(() => {
@@ -103,6 +126,7 @@ class EngineManager {
 
   /** The user switched to full strength in Settings (lite takes effect on the next launch). */
   setPref(pref) {
+    this.pref = pref;
     if (!this.started || pref !== 'full') return;
     this.ready.then(() => this.upgrade(canThread() ? 'full-mt' : 'full-single'));
   }
@@ -135,8 +159,11 @@ class EngineManager {
       this.next = full;
       if (!this.running) this.swap();
     } catch (e) {
+      this.fullTried++;
       this.status = { ...this.status, loading: null, error: `Full engine failed to load: ${e.message || e}` };
       this.emit();
+      // one more go after a pause (a stalled download usually completes the second time)
+      if (this.fullTried < 2) setTimeout(() => { this.status = { ...this.status, error: null }; this.upgrade(flavor); }, 15000);
     }
   }
 
@@ -156,6 +183,8 @@ class EngineManager {
    *   fen, moves?: [uci], movetime?: ms, depth?, nodes?, multipv?: 1..5,
    *   elo?: 1320..3190 (UCI_LimitStrength), skill?: 0..20,
    *   tag?: string, preempt?: bool (stop jobs with the same tag), stops?: [tags] (stop those),
+   *   priority?: 'low'  (runs only when nothing else is waiting, and yields to any other job:
+   *                      the result then has `yielded: true` and should be searched again),
    *   onInfo?: (lines) => void   (live updates, White's point of view)
    * }
    * Resolves { bestmove, ponder, lines: [{ multipv, depth, cp?, mate?, pv }] } with scores from
@@ -167,6 +196,8 @@ class EngineManager {
       const kill = new Set([...(job.stops || []), ...(job.preempt ? [entry.job.tag] : [])]);
       if (kill.size) this.cancel(kill);
       this.queue.push(entry);
+      // a background job steps aside for anything the user is waiting on
+      if (entry.job.priority !== 'low' && this.running?.job.priority === 'low' && !this.running.yielded) { this.running.yielded = true; this.worker?.send('stop'); }
       this.pump();
     });
   }
@@ -186,7 +217,8 @@ class EngineManager {
     if (this.next) this.swap();
     const w = this.worker;
     if (!w) { for (const q of this.queue) q.resolve(null); this.queue = []; return; }
-    const entry = this.queue.shift();
+    const pick = this.queue.findIndex(q => q.job.priority !== 'low');
+    const entry = this.queue.splice(pick >= 0 ? pick : 0, 1)[0];
     this.running = entry;
     const { job } = entry;
     const whiteToMove = (job.fen || '').split(' ')[1] !== 'b';
@@ -225,7 +257,7 @@ class EngineManager {
       const line = await done;
       if (line.startsWith('__error__')) throw new Error(line);
       const [, best, , ponder] = line.split(' ');
-      res = { bestmove: best && best !== '(none)' ? best : null, ponder: ponder || null, lines: lines.filter(Boolean), flavor: w.flavor, stopped: !!entry.stopped };
+      res = { bestmove: best && best !== '(none)' ? best : null, ponder: ponder || null, lines: lines.filter(Boolean), flavor: w.flavor, threads: w.threads, stopped: !!entry.stopped, yielded: !!entry.yielded };
     } catch {
       crashed = true;
       res = { bestmove: null, lines: [], flavor: w.flavor };
@@ -235,6 +267,7 @@ class EngineManager {
     this.running = null;
     if (this.next && !crashed) this.swap();
     entry.resolve(res);
+    if (!this.queue.length && this.idleWaiters?.length) { const ws = this.idleWaiters; this.idleWaiters = []; ws.forEach(f => f()); }
     this.pump();
   }
 }

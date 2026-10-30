@@ -91,6 +91,20 @@ export const LESSONS = [
     examples: [["7g5Se", "r5k1/3P1ppp/8/6P1/5BKP/1pq5/p7/R1R5 b - - 1 38", "c3a1 c1c8 a8c8 d7c8q", 1071], ["yhmXL", "5rk1/2P2ppp/3Q4/1p3P2/2qp2P1/4n2P/5K2/4R3 b - - 4 39", "f8c8 d6d8 c8d8 c7d8q", 1071], ["wTkjw", "1R6/2P1kpp1/3p3p/3Pp3/2P1P3/8/K6P/3q4 b - - 4 55", "d1a4 a2b2 a4c4 c7c8q", 939]],
   },
   {
+    part: 1, id: "attacked", title: "When a piece is attacked", theme: "defensiveMove",
+    idea: "He attacks something of yours. Before anything else: move it, defend it, block, or hit back harder.",
+    body: ["Four answers, in this order: can the attacked piece move somewhere safe? Can another piece defend it so the trade favours you? Can something block the line? Can you make a bigger threat of your own (a check, or attacking his queen)?", "If none works and the piece is lost, don't lose a second one: look for the move that gives up the least, or a trade that gets you out. Panic moves lose more than the attack did."],
+    checks: ["Which piece of mine is attacked, and by what?", "Move, defend, block, or counter-attack: which one works here?", "After my answer, is anything else hanging?"],
+    examples: [["SYA2x", "2r5/8/8/4k3/R1p3p1/2K3P1/8/8 w - - 0 41", "a4c4 c8c4 c3c4 e5e4", 786, "He attacked your pawn with Rxc4; the answer is a trade: ...Rxc4 Kxc4 and your king walks to e4 to collect g3. Trading when the ending is won is the simplest defence there is."], ["KiGve", "8/7k/p7/5p2/1p2q3/1B4R1/P4P1K/8 b - - 4 48", "e4h4 g3h3 h4h3 h2h3", 847, "Rh3 blocks the check with a rook that is defended by the king, and the queen on h4 has nowhere good to go: a block that wins material."], ["eldIr", "8/8/2p2k2/p1P3p1/P3K1P1/6P1/8/8 w - - 2 69", "e4d3 f6e5 d3c4 e5e4", 735, "His king stepped back; yours steps forward. ...Ke5 and ...Ke4 reach the g3 pawn before his king can do anything about it."]],
+  },
+  {
+    part: 1, id: "convert", title: "Converting a won game", theme: "endgame",
+    idea: "A piece up is not a win until you make it one. Trade pieces, not pawns, push the passed pawn, and keep your king safe.",
+    body: ["When you are ahead, every trade of pieces makes your extra material count for more, and every trade of pawns gives him drawing chances. Offer trades he can't refuse: with check, or on a piece he must recapture.", "Push the passed pawn with your king beside it, count the race before you run (your pawn's moves against his), and don't hurry: a safe move that keeps everything defended beats a flashy one.", "Watch for the two ways a won game is lost: stalemate when he has no moves left, and a back-rank or perpetual check when your king has no cover."],
+    checks: ["Am I ahead? Then which trade gets me closer to the end?", "Is my passed pawn running, and who wins the race?", "Before I move: does he have a check, a stalemate, or a perpetual?"],
+    examples: [["HHHa4", "8/8/6Kp/pp5P/2pk2P1/8/P7/8 w - - 0 39", "g6h6 c4c3 h6g6 c3c2", 635, "His king went for the h-pawn and left your c-pawn alone. ...c3 and ...c2: it queens, and his king is far outside the square."], ["PjTYT", "8/7p/5pk1/8/Pp6/4PK2/7P/8 w - - 0 38", "a4a5 b4b3 a5a6 b3b2", 577, "Count the race: your b-pawn needs two moves to queen, his a-pawn needs three. Push and you win it by a move."], ["GNgmE", "7Q/p4k2/4p3/5p1P/6q1/6P1/5PK1/8 w - - 1 58", "h8h7 g4g7 h7g7 f7g7", 627, "...Qg7 offers the queen trade where he can't decline it, and the pawn ending is won without any danger to your king. Ahead: trade pieces."]],
+  },
+  {
     part: 2, id: "discheck", title: "Discovered check", theme: "discoveredCheck",
     idea: "Move a piece out of the way and give check with the piece behind it. The piece that moved is free to do anything.",
     body: ["A discovered check is a discovered attack where the target is the king. He has to deal with the check, so whatever your moving piece attacks, he usually can't save.", "Line up a rook, bishop or queen on his king with one of your own pieces in between. Then look for the most damaging square for the front piece: a capture, a fork, an attack on the queen."],

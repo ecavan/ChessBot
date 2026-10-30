@@ -49,20 +49,29 @@ function Hub() {
       setStats(out);
     }).catch(() => setCourses([]));
   }, []);
+  // your repertoire: the one or two courses per colour you actually play; the rest fold away
+  const [myRep, setMyRep] = useState(st.myRep || []);
+  const [showAll, setShowAll] = useState(false);
+  const toggleRep = (id) => { const next = myRep.includes(id) ? myRep.filter(x => x !== id) : [...myRep, id]; setMyRep(next); saveTrain({ myRep: next }); };
   const card = (c) => {
     const s = stats[c.id];
+    const mine = myRep.includes(c.id);
     return (
-      <a key={c.id} href={`#/train/openings/${c.id}`} className="card-link !p-4 flex flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold text-white">{c.name}</span>
-          {s?.due ? <span className="tag !text-amber-300">{s.due} due</span> : s?.learned ? <span className="tag !text-emerald-300">{s.learned}/{s.total}</span> : <span className="tag">{s ? `${s.total} lines` : '…'}</span>}
-        </div>
-        <div className="text-xs text-ink-300 mt-1.5 leading-relaxed flex-1">{c.blurb}</div>
-        {s && <div className="bar mt-3"><i style={{ width: `${(s.learned / Math.max(1, s.total)) * 100}%`, background: '#10b981' }} /></div>}
-      </a>
+      <div key={c.id} className={`card-link !p-4 flex flex-col relative ${mine ? '!border-emerald-700/60' : ''}`}>
+        <button className={`absolute top-2 right-2 w-8 h-8 rounded-lg text-lg ${mine ? 'text-amber-300' : 'text-ink-500 hover:text-ink-200'}`} title={mine ? 'In your repertoire' : 'Add to your repertoire'} onClick={(e) => { e.preventDefault(); toggleRep(c.id); }}>{mine ? '★' : '☆'}</button>
+        <a href={`#/train/openings/${c.id}`} className="flex flex-col flex-1">
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <span className="font-semibold text-white">{c.name}</span>
+            {s?.due ? <span className="tag !text-amber-300">{s.due} due</span> : s?.learned ? <span className="tag !text-emerald-300">{s.learned}/{s.total}</span> : <span className="tag">{s ? `${s.total} lines` : '…'}</span>}
+          </div>
+          <div className="text-xs text-ink-300 mt-1.5 leading-relaxed flex-1">{c.blurb}</div>
+          {s && <div className="bar mt-3"><i style={{ width: `${(s.learned / Math.max(1, s.total)) * 100}%`, background: '#10b981' }} /></div>}
+        </a>
+      </div>
     );
   };
-  const white = (courses || []).filter(c => c.color === 'w'), black = (courses || []).filter(c => c.color === 'b');
+  const inRep = (c) => !myRep.length || showAll || myRep.includes(c.id);
+  const white = (courses || []).filter(c => c.color === 'w' && inRep(c)), black = (courses || []).filter(c => c.color === 'b' && inRep(c));
   const MATES = [
     ['mateIn1', 'Mate in 1', 'Warm up: spot the finish in one move.'],
     ['mateIn2', 'Mate in 2', 'A check or a quiet move, then mate. The most useful to drill.'],
@@ -84,14 +93,22 @@ function Hub() {
 
       {!courses ? <div className="text-ink-300 flex items-center gap-2"><Spinner /> Loading courses…</div> : (
         <>
-          <section>
-            <div className="h-sec mb-3">Openings as White</div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{white.map(card)}</div>
-          </section>
-          <section>
-            <div className="h-sec mb-3">Openings as Black</div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{black.map(card)}</div>
-          </section>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-ink-300">{myRep.length ? `Your repertoire: ${myRep.length} course${myRep.length === 1 ? '' : 's'}. One per colour is plenty below 1500; learn it before adding another.` : 'Pick your repertoire: tap ☆ on one course as White and one or two as Black. The others fold away so you drill what you play.'}</p>
+            {myRep.length > 0 && <button className="btn btn-sm" onClick={() => setShowAll(v => !v)}>{showAll ? 'Only my repertoire' : `Show all ${courses.length}`}</button>}
+          </div>
+          {white.length > 0 && (
+            <section>
+              <div className="h-sec mb-3">Openings as White</div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{white.map(card)}</div>
+            </section>
+          )}
+          {black.length > 0 && (
+            <section>
+              <div className="h-sec mb-3">Openings as Black</div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{black.map(card)}</div>
+            </section>
+          )}
         </>
       )}
 
