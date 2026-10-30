@@ -98,7 +98,14 @@ Stockfish 17.1 compiled to WebAssembly (the `stockfish` npm package), running in
   between two searches once the full network is ready.
 - A small job queue (`src/engine/engine.js`) runs one search at a time.
   - Searches have tags, so a bot move can pre-empt a running eval without cancelling anything else.
-  - If the worker dies (for example, the iPad runs low on memory), it is restarted automatically.
+  - If the worker dies (for example, the iPad runs low on memory), it is restarted automatically
+    (three times at most, then the app asks for a reload).
+  - If the engine's threads cannot start, the app falls back to the single-threaded builds for the
+    rest of the session instead of letting the loader spawn threads without end.
+- The engine files are cached by the service worker at runtime under their own URLs, never
+  precached: Stockfish tells its thread workers apart by a `#…,worker` fragment on the loader's
+  URL, and a precached loader is served from a revisioned URL that loses the fragment, so every
+  thread started as a whole new engine and spawned threads of its own until the tab crashed.
 
 Settings shows which engine is running, and lets you pick the review depth (0.4 s to 3 s per position).
 

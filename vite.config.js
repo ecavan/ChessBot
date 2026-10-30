@@ -34,14 +34,19 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // the app and the puzzle packs are precached; the engine networks (lite ~7 MB, full
-        // 6 × 13 MB) are cached the first time they load
+        // The app and the puzzle packs are precached. The engine (its loader scripts and the
+        // networks: lite ~7 MB, full 6 × 13 MB) is cached at runtime instead, under its own URL:
+        // precaching would serve the loader from a `?__WB_REVISION__=…` URL, and a worker's
+        // location is the URL it was served from, so Stockfish's thread workers (told apart by a
+        // `#…,worker` fragment on the loader URL) would lose the fragment, each start as a whole
+        // new engine and spawn threads of their own — a fork bomb that crashed the tab.
         globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
+        globIgnores: ['**/stockfish/**'],
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
         runtimeCaching: [{
-          urlPattern: ({ url }) => url.pathname.startsWith('/stockfish/') && url.pathname.endsWith('.wasm'),
+          urlPattern: ({ url }) => url.pathname.startsWith('/stockfish/'),
           handler: 'CacheFirst',
-          options: { cacheName: 'stockfish-wasm', expiration: { maxEntries: 20 } },
+          options: { cacheName: 'stockfish-v2', expiration: { maxEntries: 40 } },
         }],
       },
     }),

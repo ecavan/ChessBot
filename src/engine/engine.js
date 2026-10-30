@@ -19,7 +19,11 @@ const FILES = {
   'lite-single': '/stockfish/stockfish-17.1-lite-single-03e3232.js',
 };
 
-export const canThread = () => typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true;
+let threadsBroken = false;
+export const canThread = () => !threadsBroken && typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true;
+/** A thread worker that fails to start makes the loader print this and try again, without end. */
+const THREAD_FAIL = /^worker sent an (error!|unknown command)/;
+const single = (flavor) => flavor.replace('-mt', '-single');
 const cores = () => Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1));
 
 /** Parse one "info ..." line. Scores are from the side to move. */
@@ -46,7 +50,20 @@ class Worker1 {
     this.threads = flavor.endsWith('-mt') ? cores() : 1;
     this.w = new Worker(FILES[flavor]);
     this.listeners = new Set();
-    this.w.onmessage = (e) => { const line = typeof e.data === 'string' ? e.data : String(e.data); for (const l of [...this.listeners]) l(line); };
+    this.threadFails = 0;
+    this.w.onmessage = (e) => {
+      const line = typeof e.data === 'string' ? e.data : String(e.data);
+      if (THREAD_FAIL.test(line)) {
+        // the loader would keep spawning threads that die (and each one's error lands on the page):
+        // stop it here and let the manager fall back to one thread
+        if (++this.threadFails < 8 || this.dead) return;
+        this.dead = true;
+        this.w.terminate();
+        for (const l of [...this.listeners]) l('__error__ threads');
+        return;
+      }
+      for (const l of [...this.listeners]) l(line);
+    };
     this.dead = false;
   }
   send(cmd) { this.w.postMessage(cmd); }
@@ -64,7 +81,14 @@ class Worker1 {
     this.send('uci');
     const r = await ok;
     if (r.startsWith('__error__')) throw new Error(r);
-    this.send(`setoption name Threads value ${this.threads}`);
+    // threads are started with the option; a thread that cannot start shows up right away
+    if (this.threads > 1) {
+      const probe = this.waitFor(l => l.startsWith('__error__'), 1500).catch(() => null);
+      this.send(`setoption name Threads value ${this.threads}`);
+      const bad = await probe;
+      if (bad) throw new Error(bad);
+    }
+    if (this.threads === 1) this.send('setoption name Threads value 1');
     this.send('setoption name Hash value 64');
     const ready = this.waitFor(l => l === 'readyok', 60000);
     this.send('isready');
@@ -111,17 +135,30 @@ class EngineManager {
     if (this.started) return this.ready;
     this.started = true;
     this.pref = pref;
-    const mt = canThread();
-    const lite = new Worker1(mt ? 'lite-mt' : 'lite-single');
-    this.ready = lite.init().then(() => {
+    const boot = async (flavor) => {
+      const lite = new Worker1(flavor);
+      try { await lite.init(); } catch (e) {
+        lite.terminate();
+        if (flavor.endsWith('-mt') && this.threadsFailed(e)) return boot(single(flavor));
+        throw e;
+      }
       if (this.worker) { lite.terminate(); return; } // full got there first
       this.worker = lite;
       this.status = { ...this.status, flavor: lite.flavor, threads: lite.threads };
       this.emit();
-    }).catch((e) => { this.status = { ...this.status, error: String(e.message || e) }; this.emit(); });
+    };
+    this.ready = boot(canThread() ? 'lite-mt' : 'lite-single')
+      .catch((e) => { this.status = { ...this.status, error: String(e.message || e) }; this.emit(); });
     await this.ready;
-    if (pref === 'full') this.upgrade(mt ? 'full-mt' : 'full-single');
+    if (pref === 'full') this.upgrade(canThread() ? 'full-mt' : 'full-single');
     return this.ready;
+  }
+
+  /** A multi-threaded worker whose threads could not start: use one thread for the rest of the session. */
+  threadsFailed(e) {
+    if (!/__error__ threads/.test(String(e?.message || e))) return false;
+    threadsBroken = true;
+    return true;
   }
 
   /** The user switched to full strength in Settings (lite takes effect on the next launch). */
@@ -132,12 +169,21 @@ class EngineManager {
   }
 
   /** A worker died (out of memory, say): replace it with a fresh lite one so play goes on. */
-  recover(dead) {
+  recover(dead, err) {
     if (this.worker !== dead) return;
     dead.terminate();
     this.worker = null;
     this.opts = {};
+    if (err) this.threadsFailed(err);
     if (this.next) { this.swap(); return; }
+    this.recoveries = (this.recoveries || 0) + 1;
+    if (this.recoveries > 3) {
+      this.status = { ...this.status, flavor: null, loading: null, error: 'The engine keeps stopping. Reload the app to try again.' };
+      this.emit();
+      for (const q of this.queue) q.resolve(null);
+      this.queue = [];
+      return;
+    }
     const lite = new Worker1(canThread() ? 'lite-mt' : 'lite-single');
     this.status = { ...this.status, flavor: null, loading: null, error: 'The engine stopped unexpectedly and was restarted on the lite network.' };
     this.emit();
@@ -155,7 +201,14 @@ class EngineManager {
     this.emit();
     try {
       const full = new Worker1(flavor);
-      await full.init();
+      try { await full.init(); } catch (e) {
+        full.terminate();
+        if (flavor.endsWith('-mt') && this.threadsFailed(e)) {
+          this.status = { ...this.status, loading: null };
+          return this.upgrade(single(flavor));
+        }
+        throw e;
+      }
       this.next = full;
       if (!this.running) this.swap();
     } catch (e) {
@@ -252,18 +305,18 @@ class EngineManager {
     const go = job.depth ? `depth ${job.depth}` : job.nodes ? `nodes ${job.nodes}` : `movetime ${job.movetime || 1000}`;
     w.send(`go ${go}`);
     let res = null;
-    let crashed = false;
+    let crashed = null;
     try {
       const line = await done;
       if (line.startsWith('__error__')) throw new Error(line);
       const [, best, , ponder] = line.split(' ');
       res = { bestmove: best && best !== '(none)' ? best : null, ponder: ponder || null, lines: lines.filter(Boolean), flavor: w.flavor, threads: w.threads, stopped: !!entry.stopped, yielded: !!entry.yielded };
-    } catch {
-      crashed = true;
+    } catch (e) {
+      crashed = e || new Error('engine error');
       res = { bestmove: null, lines: [], flavor: w.flavor };
     }
     w.listeners.delete(listener);
-    if (crashed) this.recover(w);
+    if (crashed) this.recover(w, crashed);
     this.running = null;
     if (this.next && !crashed) this.swap();
     entry.resolve(res);
