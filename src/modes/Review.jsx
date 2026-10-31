@@ -391,7 +391,7 @@ function GameReview({ id, auto, startPly = null }) {
               {live.lines.map((l, i) => (
                 <button key={i} className="text-xs text-ink-200 flex gap-2 w-full text-left hover:text-white" onClick={() => startWalk({ title: `Engine line ${i + 1}`, fen: fens[cur], pv: l.pv, you: game.you || (fens[cur].split(' ')[1]), score: l })}><b className="num text-white w-12 shrink-0">{fmtScore(l)}</b><span className="truncate">{lineSan(fens[cur], l.pv, 8)}</span><span className="ml-auto text-emerald-300 shrink-0">step ▸</span></button>
               ))}
-              <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}</div>
+              <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}{live.settling && live.depth > live.lines[0].depth ? ` · thinking (${live.depth})…` : live.done ? ' · done' : ''}</div>
             </div>
           )}
           {!stage.portrait && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}

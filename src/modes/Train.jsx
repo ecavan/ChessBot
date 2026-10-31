@@ -407,7 +407,7 @@ function ScratchPad({ initFen }) {
         {engineOn && live.lines.length > 0 && (
           <div className="mt-2 space-y-1">
             {live.lines.map((l, i) => <div key={i} className="text-xs text-ink-200 flex gap-2"><b className="num text-white w-12 shrink-0">{fmtScore(l)}</b><span className="truncate">{lineSan(fen, l.pv, 8)}</span></div>)}
-            <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}</div>
+            <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}{live.settling && live.depth > live.lines[0].depth ? ` · thinking (${live.depth})…` : live.done ? ' · done' : ''}</div>
           </div>
         )}
       </div>
