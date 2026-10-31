@@ -5,7 +5,9 @@
  */
 import { useEffect, useState } from 'react';
 import { Chess } from 'chess.js';
-import { loadMaia } from '../engine/maia.js';
+import { maiaPredict } from '../engine/maiaClient.js';
+import { MAIA_LEVELS } from '../engine/maia.js';
+import { lessonById } from '../data/lessons.js';
 import { winPct, cpOf } from '../lib/review.js';
 
 const HUMAN = 1900;
@@ -14,19 +16,20 @@ const HUMAN = 1900;
  * fens: the game's positions up to and including the one before the move; lines: the engine's two
  * lines for that position (White's view); played: the uci played (optional, for context).
  */
-export default function HumanMove({ fens, lines, played = null }) {
+export default function HumanMove({ fens, lines, played = null, lesson = null }) {
   const [r, setR] = useState(null);
+  const [levels, setLevels] = useState(null); // p(played) at each Maia level
   const fen = fens[fens.length - 1];
   useEffect(() => {
     let live = true;
-    setR(null);
-    loadMaia(HUMAN).then(m => {
-      const g = new Chess(fen);
-      const { moves } = m.predictFens(fens, g);
-      if (live) setR(moves);
-    }).catch(() => { if (live) setR(false); });
+    setR(null); setLevels(null);
+    maiaPredict(HUMAN, fens).then(({ moves }) => { if (live) setR(moves); }).catch(() => { if (live) setR(false); });
+    if (played) {
+      Promise.all(MAIA_LEVELS.map(lv => maiaPredict(lv, fens).then(({ moves }) => moves.find(m => m.uci === played)?.p ?? 0)))
+        .then(ps => { if (live) setLevels(ps); }).catch(() => {});
+    }
     return () => { live = false; };
-  }, [fen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fen, played]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!r || !lines?.[0]?.pv?.[0]) return null;
   const white = fen.split(' ')[1] === 'w';
   const pov = (cp) => (white ? cp : -cp);
@@ -50,10 +53,21 @@ export default function HumanMove({ fens, lines, played = null }) {
     text = <>Most 1900s play <b className="text-ink-100">{human.san}</b> here ({pct(human.p)}); the engine's {san(best)} is found by {pct(pBest)} of them.</>;
   }
   const mine = played && played !== best && played !== human.uci ? r.find(x => x.uci === played) : null;
+  // where players stop making this move: the first level at which fewer than 1 in 12 play it
+  let grow = null;
+  if (levels && played && played !== best) {
+    const first = levels.findIndex(p => p < 0.08);
+    const peak = Math.max(...levels);
+    if (peak < 0.08) grow = 'Rare at every level: a slip, not a habit.';
+    else if (first < 0) grow = `Even 1900s play this ${pct(levels[levels.length - 1])} of the time: a hard spot, not a habit.`;
+    else if (first === 0) grow = `Uncommon even at 1100 (${pct(levels[0])}).`;
+    else grow = `A move players grow out of: ${pct(levels[0])} of 1100s play it, ${pct(levels[first])} of ${MAIA_LEVELS[first]}s.`;
+  }
+  const les = lesson ? lessonById(lesson) : null;
   return (
-    <p className="text-xs text-ink-300 mt-1.5">
-      <span className="text-sky-300 font-semibold">Human move</span> {text}
-      {mine ? <> Your {san(played)}: {pct(mine.p)} of them.</> : null}
-    </p>
+    <div className="text-xs text-ink-300 mt-1.5 space-y-1">
+      <p><span className="text-sky-300 font-semibold">Human move</span> {text}{mine ? <> Your {san(played)}: {pct(mine.p)} of them.</> : null}</p>
+      {grow && <p><span className="text-amber-300 font-semibold">Your level</span> {grow}{les ? <> The lesson for it: <a className="underline" href={`#/train/basics/${les.id}`}>{les.title}</a>.</> : null}</p>}
+    </div>
   );
 }

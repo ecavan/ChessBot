@@ -46,5 +46,16 @@ check(`inference time per position ${ms.toFixed(0)} ms (< 400)`, ms < 400, ms.to
   for (let i = 0; i < 200; i++) { const m = maia.sample(g, rand); seen.set(m.san, (seen.get(m.san) || 0) + 1); }
   check('samples e4 most, d4 second, others sometimes', seen.get('e4') > seen.get('d4') && seen.get('d4') > 10 && seen.size >= 3, Object.fromEntries(seen));
 }
+// rating from style: argmax level with a parabolic refinement, clamped to one step past the ends
+{
+  const { styleFromLL } = await import('../src/engine/maiaClient.js');
+  const peaked = styleFromLL({ 1100: [-30], 1300: [-26], 1500: [-25], 1700: [-27], 1900: [-31] });
+  check('style: peak between 1300 and 1500 lands near 1450', peaked.best === 1500 && peaked.est >= 1400 && peaked.est <= 1500, peaked);
+  const low = styleFromLL({ 1100: [-20], 1300: [-24], 1500: [-28], 1700: [-30], 1900: [-33] });
+  check('style: below the lowest level extrapolates down, not past 900', low.best === 1100 && low.est < 1100 && low.est >= 900, low);
+  const high = styleFromLL({ 1100: [-40], 1300: [-36], 1500: [-33], 1700: [-31], 1900: [-30] });
+  check('style: above the top extrapolates up, not past 2100', high.best === 1900 && high.est > 1900 && high.est <= 2100, high);
+  check('style: nothing to rate → null', styleFromLL({ 1100: [], 1300: [], 1500: [], 1700: [], 1900: [] }) === null, null);
+}
 console.log(fails ? `${fails} failed` : 'all passed');
 process.exit(fails ? 1 : 0);

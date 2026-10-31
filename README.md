@@ -124,12 +124,21 @@ residual network, the convolutional policy head mapped to lc0's 1858 moves, the 
 verify the port, `test/maia.test.mjs`) into `public/maia/` at 1.7 MB per level (1100, 1300, 1500,
 1700, 1900), fetched the first time a level is used.
 
-It is used in three places:
+It runs in a Web Worker (`src/engine/maiaWorker.js`, driven through `maiaClient.js`), so a bot's
+move never stalls the board and a whole game can be tagged in the background. It is used in
+four places:
 - **Human-like opponents** in Play and Watch: each Maia bot samples its move from the model, so
   it plays the natural moves and makes the natural mistakes of its level.
 - **The human move** in game review: under a mistake, what share of 1900s play the engine's
   move, and the move most of them play instead — when it is nearly as good, that is the
-  practical move, and "how did the computer find that" has an answer.
+  practical move, and "how did the computer find that" has an answer. Under it, **your level**:
+  where players stop making your move ("29% of 1100s play it, 6% of 1500s"), with the Basics
+  lesson for that kind of mistake.
+- **Rating from style**: after every review, the rating level whose players most often make the
+  moves each side made (book moves and only-moves aside), with a parabolic interpolation between
+  levels — "Played like 1340" in the summary, averaged over your last ten games in Insights. It
+  is on Maia's scale (lichess ratings), and it measures whose moves yours look like, not how good
+  they were; the two numbers disagree in interesting ways.
 - **Puzzle difficulty**: after a puzzle, how many 1500s and 1900s find the key move.
 
 The weights are GPLv3 (they derive from Leela Chess Zero).

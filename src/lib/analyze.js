@@ -12,6 +12,7 @@ import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 import { addMistakePuzzles } from './puzzles.js';
+import { maiaStyle } from '../engine/maiaClient.js';
 
 function terminalOf(fen) {
   const g = new Chess(fen);
@@ -77,7 +78,39 @@ export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = 
   saveGame(game);
   // your mistakes become puzzles for the "Your mistakes" queue (full-network reviews only: lite ones are rough)
   if (game.you && flavor?.startsWith('full')) { try { addMistakePuzzles(game, classified(game)); } catch { /* not vital */ } }
+  styleRating(gameId).catch(() => {});
   return game;
+}
+
+/**
+ * Rating from style (Maia): which rating level's players make the moves each side made, from the
+ * move after the book. Runs in the Maia worker after a review and is saved as review.style =
+ * { w: { est, best, n }, b: { … } }; a game with under eight non-book moves a side gets nothing.
+ */
+export async function styleRating(gameId) {
+  const game = getGame(gameId);
+  if (!game?.review?.positions) return null;
+  const { fens, moves } = replay(game);
+  const first = fens[0].split(' ')[1];
+  await loadBook();
+  const style = {};
+  for (const color of ['w', 'b']) {
+    const idx = [];
+    for (let i = 0; i < moves.length; i++) {
+      if (moves[i].color !== color) continue;
+      if (isBook(fens[i + 1])) continue; // book moves say nothing about the player
+      if (new Chess(fens[i]).moves().length < 2) continue; // only move
+      idx.push(i);
+    }
+    if (idx.length < 8) continue;
+    const r = await maiaStyle(fens, idx);
+    if (r) style[color] = { est: r.est, best: r.best, n: r.n };
+  }
+  const g = getGame(gameId);
+  if (!g?.review) return null;
+  const updated = { ...g, review: { ...g.review, style } };
+  saveGame(updated);
+  return style;
 }
 
 /** Which engine a review was made with: { flavor, full: bool, ms } (full = the complete network). */

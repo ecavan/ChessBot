@@ -11,7 +11,8 @@
 import { Chess } from 'chess.js';
 import { engine } from './engine.js';
 import { cpOf } from '../lib/review.js';
-import { loadMaia, fensFromUci } from './maia.js';
+import { fensFromUci } from './maia.js';
+import { maiaPredict } from './maiaClient.js';
 
 export const BOTS = [
   { id: 'b400', elo: 400, name: 'Pawnstorm Pete', icon: '🐣', blurb: 'Just learned how the pieces move.', weak: { depth: 1, temp: 260, random: 0.3 } },
@@ -51,14 +52,14 @@ export const botById = (id) => ALL_BOTS.find(b => b.id === id) || BOTS[5];
 export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 'guard', 'coach'], uci = null, startFen = null } = {}) {
   if (bot.maia) {
     // the human model: its context is the game so far (lc0 sees the last eight positions)
-    const maia = await loadMaia(bot.maia);
     const fens = uci ? fensFromUci(startFen, uci) : [fen];
     if (fens[fens.length - 1].split(' ').slice(0, 4).join(' ') !== fen.split(' ').slice(0, 4).join(' ')) fens.push(fen);
-    const g = new Chess(fen);
-    if (!g.moves().length) return null;
-    await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
-    const m = maia.sampleFens(fens, g);
-    return m ? m.uci : null;
+    if (!new Chess(fen).moves().length) return null;
+    const [{ moves }] = await Promise.all([maiaPredict(bot.maia, fens), new Promise(r => setTimeout(r, 400 + Math.random() * 600))]);
+    // sample by the model's probabilities: it varies like a person does
+    let x = Math.random();
+    for (const m of moves) { x -= m.p; if (x <= 0) return m.uci; }
+    return moves[0]?.uci || null;
   }
   if (bot.max) {
     const r = await engine.search({ fen, movetime: 2500, tag, stops });

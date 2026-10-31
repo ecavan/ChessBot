@@ -8,7 +8,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, EvalGraph, ClsDot, Progress, Spinner, Seg, Sheet, Stat, fmtScore } from '../ui/kit.jsx';
 import { allGames, subscribeGames, getGame, deleteGame, importPgnText, fetchChessCom, fetchLichess, gamePgn, replay, resultFor } from '../lib/games.js';
-import { analyzeGame, classified } from '../lib/analyze.js';
+import { analyzeGame, classified, styleRating } from '../lib/analyze.js';
 import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
@@ -23,6 +23,7 @@ import { NavButtons } from './Play.jsx';
 import Insights from './Insights.jsx';
 import QueueCard from './QueueCard.jsx';
 import HumanMove from '../ui/HumanMove.jsx';
+import { mistakeKind } from '../lib/plan.js';
 import { promote, pause, enqueue, useQueue } from '../lib/reviewQueue.js';
 import { reviewEngine } from '../lib/analyze.js';
 
@@ -261,6 +262,10 @@ function GameReview({ id, auto, startPly = null }) {
   const wins = full ? fens.map((_, i) => winPct(cpOf(posLine(i)))) : [];
   const marks = cls ? cls.cls.map((c, i) => ({ ply: i + 1, cls: c.cls })).filter(m => ['blunder', 'mistake', 'miss', 'brilliant', 'great'].includes(m.cls)) : [];
   const c = cur > 0 && cls ? cls.cls[cur - 1] : null;
+  // reviews from before the style rating existed: compute it once, in the Maia worker
+  useEffect(() => {
+    if (game?.review?.summary && !game.review.style && !game.review.partial) styleRating(game.id).catch(() => {});
+  }, [game?.id, !!game?.review?.summary, !!game?.review?.style]); // eslint-disable-line react-hooks/exhaustive-deps
   const mv = cur > 0 ? moves[cur - 1] : null;
   const bestSan = c && c.bestUci ? uciToSan(fens[cur - 1], c.bestUci) : null;
   const bad = c && ['inaccuracy', 'mistake', 'blunder', 'miss'].includes(c.cls);
@@ -356,7 +361,7 @@ function GameReview({ id, auto, startPly = null }) {
                 return pts.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
               })()}
               {bad && c.bestLine?.length > 0 && <p className="text-xs text-ink-300 mt-1.5"><span className="text-emerald-300 font-semibold">Best line</span> {lineSan(fens[cur - 1], c.bestLine, 8)}</p>}
-              {bad && prefs.humanMove !== false && <HumanMove fens={fens.slice(0, cur)} lines={game.review.positions[cur - 1]?.lines} played={uciOf(mv)} />}
+              {bad && prefs.humanMove !== false && <HumanMove fens={fens.slice(0, cur)} lines={game.review.positions[cur - 1]?.lines} played={uciOf(mv)} lesson={cls && moverOf(cur - 1) === game.you ? mistakeKind(cls, cur - 1) : null} />}
               {bad && c.afterLine?.length > 0 && <p className="text-xs text-ink-300 mt-1"><span className="text-rose-300 font-semibold">After {mv.san}</span> {lineSan(fens[cur], c.afterLine, 6)}</p>}
               <div className="flex flex-wrap gap-2 mt-3">
                 {bad && c.bestLine?.length > 0 && <button className="btn btn-sm btn-primary" onClick={() => startWalk({ title: `The better move: ${bestSan}`, fen: fens[cur - 1], pv: c.bestLine, you: moverOf(cur - 1), score: game.review.positions[cur - 1]?.lines?.[0], prevUci: cur > 1 ? uciOf(moves[cur - 2]) : null })}>Show best line, step by step</button>}
@@ -451,6 +456,13 @@ function Summary({ game, sum }) {
         <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How strong the moves in this game were, on chess.com's rapid scale. One game is a rough guide; Insights averages your last ten for your level.">Game rating</div>
         <div className="text-sm text-ink-200 num">{sum.est.b ?? '–'}</div>
       </div>
+      {game.review.style && (game.review.style.w || game.review.style.b) && (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
+          <div className="text-sm text-sky-200 num">{game.review.style.w?.est ?? '–'}</div>
+          <div className="text-[11px] uppercase tracking-wider text-ink-400" title="Rating from style (Maia, on the lichess scale): the rating level whose players most often make the moves this side made, book moves aside. A different measure from the game rating: not how good the moves were, but whose moves they look like.">Played like</div>
+          <div className="text-sm text-sky-200 num">{game.review.style.b?.est ?? '–'}</div>
+        </div>
+      )}
       <div className="mt-3 space-y-0.5">
         {rows.map(k => (sum.counts.w[k] || sum.counts.b[k]) ? (
           <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-sm">

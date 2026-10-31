@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
-import { loadMaia } from '../engine/maia.js';
+import { maiaPredict } from '../engine/maiaClient.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, Seg, Spinner } from '../ui/kit.jsx';
 import { pick, daily, record, progress, dueReviews, today, themeName, THEME_GROUPS, loadIndex, dueMine, mineCount, recordMine } from '../lib/puzzles.js';
@@ -352,7 +352,7 @@ function HumanFound({ fen, uci }) {
   useEffect(() => {
     let live = true;
     setR(null);
-    Promise.all([1500, 1900].map(lv => loadMaia(lv).then(m => m.predictFens([fen]).moves.find(x => x.uci === uci)?.p ?? 0)))
+    Promise.all([1500, 1900].map(lv => maiaPredict(lv, [fen]).then(({ moves }) => moves.find(x => x.uci === uci)?.p ?? 0)))
       .then(ps => { if (live) setR(ps); }).catch(() => { if (live) setR(false); });
     return () => { live = false; };
   }, [fen, uci]);
