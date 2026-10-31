@@ -76,5 +76,35 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   const r = explainMove(f, 'e1e2', { cls: 'miss', bestUci: 'b5c7', bestLine: ['b5c7', 'e8d7', 'c7a8'] });
   check('missed fork', r.points.some(p => /missed Nc7\+/.test(p) && /forks/.test(p)), r.points);
 }
+// 12. a queen trade you started is not "a queen left undefended" / "you lose a piece"
+{
+  const f = fenAfter('d4 d5 Nc3 Nf6 Nf3 Nc6 Bd2 Bf5 e4 dxe4 Ne5 Nxe5 dxe5 Nd5 Nxd5 Qxd5 Qe2 Qxe5 g4 Qxb2 Rd1 Bg6 Bh3 O-O-O O-O Qxc2 g5 e6 f4 Bc5+ Kh1 e3 Bxe6+ Kb8 Bb3 Be4+ Kg1 Qd3 Rde1');
+  const r = explainMove(f, uci(f, 'Qxe2'), { cls: 'miss', bestUci: uci(f, 'exd2+'), bestLine: ['e3d2', 'e2e3', 'c5e3', 'e1e3', 'd3e3', 'f1f2', 'd2d1q', 'b3d1'], afterLine: ['e2e2'.replace('e2e2', 'e1e2'), 'e3d2', 'e2f2', 'h8e8', 'h2h4', 'e4f3'] });
+  check('no "left undefended" for a recapture', !r.points.some(p => /left undefended/.test(p)), r.points);
+  check('no "you lose" after a trade that wins a piece', !r.points.some(p => /You lose/.test(p)), r.points);
+  check('the missed exd2+ is named', r.points.some(p => /missed exd2\+/.test(p)), r.points);
+}
+// 13. a piece already under attack, and the move does not save it
+{
+  const f = fenAfter('e4 e5 Nf3 Nf6 d4 exd4 Nxd4 Bc5 Be3 Nxe4 Nc3');
+  const r = explainMove(f, uci(f, 'Nc6'), { cls: 'blunder', bestUci: uci(f, 'Nxc3'), bestLine: ['e4c3', 'b2c3', 'd7d6'], afterLine: ['d4c6', 'b7c6', 'c3e4', 'c5e3', 'f2e3', 'd8h4'] });
+  check('names the attacked knight on e4', r.points.some(p => /knight on e4 was attacked and Nc6 does not save it/.test(p)), r.points);
+  check('and the material lost', r.points.some(p => /You lose a piece/.test(p)), r.points);
+}
+// 14. a pawn attacks the knight, and the bishop move ignores it
+{
+  const f = fenAfter('e4 e5 Nf3 Nc6 Bc4 Nf6 Nc3 Nxe4 Nxe4 d5');
+  const r = explainMove(f, uci(f, 'Bb3'), { cls: 'blunder', bestUci: uci(f, 'Bd3'), bestLine: ['c4d3', 'd5e4', 'd3e4'], afterLine: ['d5e4', 'f3g1', 'd8d4'] });
+  check('knight on e4 attacked, Bb3 does not save it', r.points.some(p => /knight on e4 was attacked and Bb3 does not save it/.test(p)), r.points);
+}
+// 15. the queen for a bishop, not "a rook"; a bishop-for-knight trade is not "a piece lost"
+{
+  const f = fenAfter('e4 e5 Nf3 Nf6 d4 exd4 Nxd4 Bc5 Be3 Nxe4 Nc3 Nc6 Bd3 Nxd4 Bxd4 Bxd4 Bxe4 Bxc3+ bxc3 d6 Qe2 Qe7 O-O-O');
+  const r = explainMove(f, uci(f, 'O-O'), { cls: 'blunder', bestUci: uci(f, 'Qg5+'), bestLine: ['e7g5', 'c1b2'], afterLine: ['e4h7', 'g8h7', 'e2e7', 'h7g8', 'e7h4', 'c8e6'] });
+  check('queen for a bishop', r.points.some(p => /You lose the queen for a bishop/.test(p)), r.points);
+  const f2 = fenAfter('e4 e5 Nf3 Nf6 d4 exd4 Nxd4 Bc5 Be3 Nxe4 Nc3 Nc6 Bd3 Nxd4 Bxd4 Bxd4 Bxe4');
+  const r2 = explainMove(f2, uci(f2, 'Bxc3+'), { cls: 'mistake', bestUci: uci(f2, 'Qf6'), bestLine: ['d8f6', 'e1g1'], afterLine: ['b2c3', 'c7c6', 'd1d6', 'd8e7', 'e1c1', 'e7d6'] });
+  check('a trade is not a piece lost', !r2.points.some(p => /You lose|left undefended/.test(p)), r2.points);
+}
 console.log(fails ? `${fails} failed` : 'all passed');
 process.exit(fails ? 1 : 0);

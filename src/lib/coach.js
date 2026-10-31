@@ -114,7 +114,21 @@ export function lineGain(fen, pv, color, maxPly = 8) {
     try { const m = g.move({ from: pv[k].slice(0, 2), to: pv[k].slice(2, 4), promotion: pv[k][4] }); sans.push(m.san); k++; } catch { break; }
   }
   const d = material(g.fen()) - m0;
-  return { gain: color === 'w' ? d : -d, sans, mate: g.isCheckmate() };
+  // the biggest piece each side took along the way, for the wording ("the queen for a bishop")
+  let lost = null, got = null;
+  for (const h of g.history({ verbose: true })) {
+    if (!h.captured) continue;
+    if (h.color === color) { if (!got || val(h.captured) > val(got)) got = h.captured; } else if (!lost || val(h.captured) > val(lost)) lost = h.captured;
+  }
+  return { gain: color === 'w' ? d : -d, sans, mate: g.isCheckmate(), lost, got };
+}
+
+/** What a losing line costs, in words: "a piece", "the queen for a rook", "the exchange" … */
+export function lossWords(loss) {
+  const net = -loss.gain;
+  if (loss.lost === 'q' && net >= 3.5) return loss.got && loss.got !== 'p' && loss.got !== 'q' ? `the queen for a ${NAME[loss.got]}` : 'the queen';
+  if (loss.lost === 'r' && (loss.got === 'n' || loss.got === 'b') && net >= 1.5 && net < 3) return 'the exchange';
+  return worth(net);
 }
 
 function lineText(fen, pv, n = 6) {
@@ -330,6 +344,32 @@ function principles(fen, m, after, ply) {
 // ------------------------------------------------------------------ explaining a move
 
 /**
+ * A piece of the mover's left loose after `m` that the refutation `ref` (from `after`) then
+ * takes: "your knight on e4 was attacked and Nc6 doesn't save it", "Bd7 hangs the bishop" …
+ * Returns a sentence or null. The lead-in "After this," is added by the caller.
+ */
+export function hangingIn(fen, after, m, ref) {
+  const me = m.color;
+  const pos = parse(after);
+  const g = new Chess(after);
+  const taken = [];
+  for (let i = 0; i < Math.min(ref.length, 6); i++) {
+    let x;
+    try { x = g.move({ from: ref[i].slice(0, 2), to: ref[i].slice(2, 4), promotion: ref[i][4] }); } catch { break; }
+    if (x.color !== me && x.captured && x.captured !== 'p') taken.push(x.to);
+  }
+  // the first of my loose pieces that the line actually takes, biggest first
+  const cands = taken.filter(s => pos[s]?.color === me && loose(after, s)).sort((a, b) => val(pos[b].type) - val(pos[a].type));
+  const s = cands[0];
+  if (!s) return null;
+  const piece = NAME[pos[s].type];
+  const wasLoose = parse(fen)[s]?.color === me && loose(fen, s);
+  if (s === m.to) return `your ${piece} can simply be taken on ${s}.`;
+  if (wasLoose && s !== m.from) return `your ${piece} on ${s} was attacked and ${m.san} does not save it.`;
+  return `${m.san} leaves the ${piece} on ${s} hanging.`;
+}
+
+/**
  * Explain a played move.
  *   fen: position before the move; uci: the move played;
  *   ctx: { cls, drop (win% lost), bestUci, bestLine (pv from fen), afterLine (pv after the move), ply }
@@ -352,12 +392,17 @@ export function explainMove(fen, uci, ctx = {}) {
   if (bad && ctx.afterLine?.length) {
     // what goes wrong: follow the opponent's best reply
     const ref = ctx.afterLine;
-    const loss = lineGain(after, ref, me);
-    const why = motifOf(after, ref[0]);
+    // material counted from before your move: a trade you started is not a loss when he takes back
+    const loss = lineGain(fen, [uci, ...ref], me, 9);
+    // the commonest reason at club level: a piece of yours is left where it can be taken
+    const hung = loss.gain <= -1 ? hangingIn(fen, after, m, ref) : null;
+    const motif = motifOf(after, ref[0], uci);
+    const why = hung || motif;
+    const trade = why && /takes back/.test(why);
     const refSan = tryMove(after, ref[0])?.m.san;
     if (loss.mate || ctx.afterMate) points.push(`${why ? `After this, ${why} ` : ''}It ends in a forced mate: ${lineText(after, ref, 7)}.`);
-    else if (loss.gain <= -1) points.push(`After this, ${why || `${refSan} is strong.`} You lose ${worth(-loss.gain)}: ${lineText(after, ref, 6)}.`);
-    else if (why) points.push(`After this, ${why} (${lineText(after, ref, 5)})`);
+    else if (loss.gain <= -1) points.push(`After this, ${why || `${refSan} is strong.`} You lose ${lossWords(loss)}: ${lineText(after, ref, 6)}.`);
+    else if (why && !trade) points.push(`After this, ${why} (${lineText(after, ref, 5)})`);
     if (ref[0]) arrows.push({ from: ref[0].slice(0, 2), to: ref[0].slice(2, 4), color: 'rgba(244,63,94,.85)' });
   }
   const better = [];
