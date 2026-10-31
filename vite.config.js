@@ -44,12 +44,17 @@ export default defineConfig({
         // (lite ~7 MB, full 6 × 13 MB) are plain fetches from inside the worker and are cached
         // at runtime for offline use.
         globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
-        globIgnores: ['**/stockfish/**'],
+        globIgnores: ['**/stockfish/**', '**/maia/**'],
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
         runtimeCaching: [{
           urlPattern: ({ url, request }) => url.pathname.startsWith('/stockfish/') && !/\.js$/.test(url.pathname) && request.destination !== 'worker' && request.destination !== 'sharedworker' && request.destination !== 'script',
           handler: 'CacheFirst',
           options: { cacheName: 'stockfish-v3', expiration: { maxEntries: 40 } },
+        }, {
+          // the Maia nets (1.7 MB each): cached the first time a level is used, refreshed behind
+          urlPattern: ({ url }) => url.pathname.startsWith('/maia/'),
+          handler: 'StaleWhileRevalidate',
+          options: { cacheName: 'maia-v1', expiration: { maxEntries: 12 } },
         }],
       },
     }),

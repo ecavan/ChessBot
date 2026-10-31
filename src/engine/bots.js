@@ -11,6 +11,7 @@
 import { Chess } from 'chess.js';
 import { engine } from './engine.js';
 import { cpOf } from '../lib/review.js';
+import { loadMaia, fensFromUci } from './maia.js';
 
 export const BOTS = [
   { id: 'b400', elo: 400, name: 'Pawnstorm Pete', icon: '🐣', blurb: 'Just learned how the pieces move.', weak: { depth: 1, temp: 260, random: 0.3 } },
@@ -27,12 +28,38 @@ export const BOTS = [
   { id: 'b2800', elo: 2800, name: 'World Champion', icon: '🏆', blurb: 'Top-player strength.' },
   { id: 'max', elo: 3500, name: 'Stockfish 17.1', icon: '🐟', blurb: 'Full strength. Every thread, the full network.', max: true },
 ];
-export const botById = (id) => BOTS.find(b => b.id === id) || BOTS[5];
+/**
+ * Human-like bots: Maia (McIlroy-Young et al., 2020), a network trained on millions of lichess
+ * games to predict the move a player of that rating actually makes. It plays the natural moves
+ * and makes the natural mistakes of its level (hangs pieces to forks, misses backward moves,
+ * trades when ahead), where a throttled engine makes engine-shaped ones. Each move is sampled
+ * from the model's probabilities, so it varies like a person does.
+ */
+export const MAIA_BOTS = [
+  { id: 'maia1100', elo: 1100, name: 'Maia 1100', icon: '🧑', blurb: 'Plays like a real 1100: the moves people at that level actually play, mistakes included.', maia: 1100 },
+  { id: 'maia1300', elo: 1300, name: 'Maia 1300', icon: '🧑‍🦱', blurb: 'A typical 1300 on lichess: natural moves, the occasional hung piece.', maia: 1300 },
+  { id: 'maia1500', elo: 1500, name: 'Maia 1500', icon: '🧔', blurb: 'The 1500 you are trying to become. Punish the mistakes a 1500 really makes.', maia: 1500 },
+  { id: 'maia1700', elo: 1700, name: 'Maia 1700', icon: '👩', blurb: 'Solid club player habits; fewer gifts.', maia: 1700 },
+  { id: 'maia1900', elo: 1900, name: 'Maia 1900', icon: '👨‍🏫', blurb: 'Plays like a strong club player, not like an engine.', maia: 1900 },
+];
+export const ALL_BOTS = [...BOTS, ...MAIA_BOTS];
+export const botById = (id) => ALL_BOTS.find(b => b.id === id) || BOTS[5];
 
 /**
  * The bot's move for `fen` (UCI). thinkMs: how long a limited bot thinks (full strength uses more).
  */
-export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 'guard', 'coach'] } = {}) {
+export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 'guard', 'coach'], uci = null, startFen = null } = {}) {
+  if (bot.maia) {
+    // the human model: its context is the game so far (lc0 sees the last eight positions)
+    const maia = await loadMaia(bot.maia);
+    const fens = uci ? fensFromUci(startFen, uci) : [fen];
+    if (fens[fens.length - 1].split(' ').slice(0, 4).join(' ') !== fen.split(' ').slice(0, 4).join(' ')) fens.push(fen);
+    const g = new Chess(fen);
+    if (!g.moves().length) return null;
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
+    const m = maia.sampleFens(fens, g);
+    return m ? m.uci : null;
+  }
   if (bot.max) {
     const r = await engine.search({ fen, movetime: 2500, tag, stops });
     return r?.bestmove || null;

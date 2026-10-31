@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, PlayerStrip, EvalBar, MoveList, Toggle, Seg, Sheet, Spinner, fmtScore } from '../ui/kit.jsx';
-import { BOTS, botById, botMove } from '../engine/bots.js';
+import { BOTS, MAIA_BOTS, botById, botMove } from '../engine/bots.js';
 import { engine } from '../engine/engine.js';
 import { useLiveEval } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
@@ -74,7 +74,24 @@ function PlaySetup({ query }) {
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
         <section className="panel panel-pad">
-          <div className="h-sec mb-3">Opponent</div>
+          <div className="h-sec mb-3">Human-like opponents</div>
+          <p className="text-sm text-ink-300 mb-3">Maia is a network trained on millions of real games to play the move a person of that rating plays, natural mistakes included. The 1500 here loses the way the 1500s you meet online lose, so what you learn to punish at home shows up in your games.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 mb-6">
+            {MAIA_BOTS.map(b => (
+              <button key={b.id} onClick={() => setBotId(b.id)}
+                className={`text-left rounded-2xl border px-3.5 py-3 transition ${botId === b.id ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_0_3px_rgba(16,185,129,.18)]' : 'border-ink-700 bg-ink-850 hover:border-ink-500'}`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">{b.icon}</span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white truncate">{b.name}</div>
+                    <div className="text-xs font-bold num text-sky-300">human-like</div>
+                  </div>
+                </div>
+                <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
+              </button>
+            ))}
+          </div>
+          <div className="h-sec mb-3">Engine opponents</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
             {BOTS.map(b => (
               <button key={b.id} onClick={() => setBotId(b.id)}
@@ -223,7 +240,7 @@ function PlayGame() {
     if (!cur || over || pending || walk || turn === cur.you) return undefined; // the bot waits while you step through a line
     const my = ++token.current;
     setThinking(true);
-    botMove(bot, fen).then((uci) => {
+    botMove(bot, fen, { uci: cur.uci, startFen: cur.startFen }).then((uci) => {
       if (my !== token.current) return;
       setThinking(false);
       // no move: the engine crashed and is restarting (or is still loading). Ask again shortly.

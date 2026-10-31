@@ -22,6 +22,7 @@ import { moveSound } from '../lib/sound.js';
 import { NavButtons } from './Play.jsx';
 import Insights from './Insights.jsx';
 import QueueCard from './QueueCard.jsx';
+import HumanMove from '../ui/HumanMove.jsx';
 import { promote, pause, enqueue, useQueue } from '../lib/reviewQueue.js';
 import { reviewEngine } from '../lib/analyze.js';
 
@@ -355,6 +356,7 @@ function GameReview({ id, auto, startPly = null }) {
                 return pts.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
               })()}
               {bad && c.bestLine?.length > 0 && <p className="text-xs text-ink-300 mt-1.5"><span className="text-emerald-300 font-semibold">Best line</span> {lineSan(fens[cur - 1], c.bestLine, 8)}</p>}
+              {bad && prefs.humanMove !== false && <HumanMove fens={fens.slice(0, cur)} lines={game.review.positions[cur - 1]?.lines} played={uciOf(mv)} />}
               {bad && c.afterLine?.length > 0 && <p className="text-xs text-ink-300 mt-1"><span className="text-rose-300 font-semibold">After {mv.san}</span> {lineSan(fens[cur], c.afterLine, 6)}</p>}
               <div className="flex flex-wrap gap-2 mt-3">
                 {bad && c.bestLine?.length > 0 && <button className="btn btn-sm btn-primary" onClick={() => startWalk({ title: `The better move: ${bestSan}`, fen: fens[cur - 1], pv: c.bestLine, you: moverOf(cur - 1), score: game.review.positions[cur - 1]?.lines?.[0], prevUci: cur > 1 ? uciOf(moves[cur - 2]) : null })}>Show best line, step by step</button>}

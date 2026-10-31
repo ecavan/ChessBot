@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
+import { loadMaia } from '../engine/maia.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, Seg, Spinner } from '../ui/kit.jsx';
 import { pick, daily, record, progress, dueReviews, today, themeName, THEME_GROUPS, loadIndex, dueMine, mineCount, recordMine } from '../lib/puzzles.js';
@@ -338,10 +339,27 @@ function Solver({ mode, theme, id }) {
           )}
         </div>
       )}
+      {p && done && lineFens[1] && <HumanFound fen={lineFens[1]} uci={p.moves[1]} />}
       {p && done && !p.mine && <div className="text-xs text-ink-400 px-1">Puzzle {p.id} · <a className="underline" href={`https://lichess.org/training/${p.id}`} target="_blank" rel="noreferrer">open on Lichess</a></div>}
       <a href="#/puzzles" className="btn btn-quiet btn-sm self-start">← All puzzle modes</a>
     </Stage>
   );
+}
+
+/** How hard this really is: the share of 1500s and 1900s (Maia) who play the key move here. */
+function HumanFound({ fen, uci }) {
+  const [r, setR] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setR(null);
+    Promise.all([1500, 1900].map(lv => loadMaia(lv).then(m => m.predictFens([fen]).moves.find(x => x.uci === uci)?.p ?? 0)))
+      .then(ps => { if (live) setR(ps); }).catch(() => { if (live) setR(false); });
+    return () => { live = false; };
+  }, [fen, uci]);
+  if (!r) return null;
+  const pct = (p) => `${Math.round(100 * p)}%`;
+  const hard = r[0] < 0.15 ? 'A hard one: ' : r[0] > 0.5 ? 'A natural one: ' : '';
+  return <div className="text-xs text-ink-400 px-1">{hard}found by <span className="text-ink-200">{pct(r[0])}</span> of 1500s and <span className="text-ink-200">{pct(r[1])}</span> of 1900s (Maia).</div>;
 }
 
 function StatusCard({ status, p, delta, failed, hint, mode, you }) {

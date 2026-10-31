@@ -9,7 +9,7 @@ nothing leaves the device.
 ## What's in it
 
 **Play**
-- Thirteen opponents, from a 400 beginner up to full-strength Stockfish 17.1.
+- Thirteen engine opponents, from a 400 beginner up to full-strength Stockfish 17.1, and five human-like ones (Maia 1100–1900) that play the moves real players of that rating play.
   - 1400 and above use Stockfish's own strength limiter (`UCI_LimitStrength` / `UCI_Elo`).
   - The weaker bots search shallowly, pick among several candidate moves with some randomness, and now and then play a loose move, so they blunder the way beginners do.
 - A coach (on by default) and optional assists: progressive hints (first the piece, then the move), threat arrows, a blunder check ("are you sure?" when a move drops your winning chances a lot), and an eval bar.
@@ -112,6 +112,28 @@ Stockfish 17.1 compiled to WebAssembly (the `stockfish` npm package), running in
 
 Settings shows which engine is running, and lets you pick the review depth (0.4 s to 3 s per position).
 
+## The human model: Maia
+
+Stockfish says what the best move is. Maia (McIlroy-Young, Sen, Kleinberg & Anderson, KDD 2020)
+says what a *person* plays: a Leela-style network trained on millions of lichess games, one net
+per rating level, to predict the move the human actually made. It is right about half the time
+for its own level, where a throttled engine is right far less and wrong in engine-shaped ways.
+The app runs it in plain JavaScript (`src/engine/maia.js`: the lc0 112-plane encoder, the 6×64 SE
+residual network, the convolutional policy head mapped to lc0's 1858 moves, the WDL head), about
+0.2 s a position, from weights exported by `tools/maia/maia_ref.py` (a numpy reference used to
+verify the port, `test/maia.test.mjs`) into `public/maia/` at 1.7 MB per level (1100, 1300, 1500,
+1700, 1900), fetched the first time a level is used.
+
+It is used in three places:
+- **Human-like opponents** in Play and Watch: each Maia bot samples its move from the model, so
+  it plays the natural moves and makes the natural mistakes of its level.
+- **The human move** in game review: under a mistake, what share of 1900s play the engine's
+  move, and the move most of them play instead — when it is nearly as good, that is the
+  practical move, and "how did the computer find that" has an answer.
+- **Puzzle difficulty**: after a puzzle, how many 1500s and 1900s find the key move.
+
+The weights are GPLv3 (they derive from Leela Chess Zero).
+
 ## Run it
 
 ```bash
@@ -170,6 +192,7 @@ restore a backup.
 ## Credits
 
 - Stockfish 17.1 (GPLv3), via the `stockfish` npm package.
+- Maia Chess weights (GPLv3), CSSLab/maia-chess; lc0's policy tables (GPLv3).
 - Puzzles: the Lichess puzzle database (CC0).
 - Opening names: lichess-org/chess-openings (CC0).
 - Classic pieces: cburnett.

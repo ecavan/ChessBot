@@ -15,7 +15,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, PlayerStrip, EvalBar, MoveList, Seg, Toggle, Spinner, ClsDot, EvalGraph, fmtScore } from '../ui/kit.jsx';
 import { WalkPanel, walkBoard, makeWalk } from '../ui/LineWalk.jsx';
-import { BOTS, botById, botMove } from '../engine/bots.js';
+import { ALL_BOTS, botById, botMove } from '../engine/bots.js';
 import { engine } from '../engine/engine.js';
 import { replay, recordPlayed, saveGame, getGame } from '../lib/games.js';
 import { START, uciOf, uciToSan } from '../lib/chessutil.js';
@@ -153,7 +153,7 @@ export default function Watch() {
     const bot = botOf(game.turn());
     const t0 = Date.now();
     setThinking(true);
-    botMove(bot, fen, { tag: 'bot', stops: ['eval'] }).then(async (u) => {
+    botMove(bot, fen, { tag: 'bot', stops: ['eval'], uci, startFen: START }).then(async (u) => {
       const wait = Math.max(0, PACES[pace].delay - (Date.now() - t0));
       await new Promise(r => setTimeout(r, wait));
       if (my !== token.current) return;
@@ -259,13 +259,13 @@ export default function Watch() {
             <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
               <label className="text-xs text-ink-300">White
                 <select className="w-full mt-1" value={white} onChange={(e) => setWhite(e.target.value)}>
-                  {BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : `(${b.elo})`}</option>)}
+                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : b.maia ? '(human-like)' : `(${b.elo})`}</option>)}
                 </select>
               </label>
               <button className="ibtn mb-0.5" aria-label="Swap colours" onClick={() => { setWhite(black); setBlack(white); }}>⇄</button>
               <label className="text-xs text-ink-300">Black
                 <select className="w-full mt-1" value={black} onChange={(e) => setBlack(e.target.value)}>
-                  {BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : `(${b.elo})`}</option>)}
+                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : b.maia ? '(human-like)' : `(${b.elo})`}</option>)}
                 </select>
               </label>
             </div>
