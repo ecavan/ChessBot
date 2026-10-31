@@ -350,7 +350,7 @@ function GameReview({ id, auto, startPly = null }) {
                 <span className="ml-auto text-sm num text-ink-200" title="Engine evaluation after this move">{fmtScore(posLine(cur))}</span>
               </div>
               {(() => {
-                const ex = explainMove(fens[cur - 1], uciOf(mv), { cls: c.cls, drop: c.drop, bestUci: c.bestUci, bestLine: c.bestLine, afterLine: c.afterLine, ply: cur - 1, prevUci: cur >= 2 ? uciOf(moves[cur - 2]) : null });
+                const ex = explainMove(fens[cur - 1], uciOf(mv), { cls: c.cls, drop: c.drop, bestUci: c.bestUci, bestLine: c.bestLine, afterLine: c.afterLine, ply: cur - 1, prevUci: cur >= 2 ? uciOf(moves[cur - 2]) : null, prevCaptured: cur >= 2 ? !!moves[cur - 2].captured : null, mateIn: c.mateIn, wAfter: c.wAfter });
                 const pts = ex.points.length ? ex.points : [explain(c, mv, fens[cur - 1], bestSan, moverOf(cur - 1))];
                 return pts.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
               })()}

@@ -83,6 +83,8 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   check('no "left undefended" for a recapture', !r.points.some(p => /left undefended/.test(p)), r.points);
   check('no "you lose" after a trade that wins a piece', !r.points.some(p => /You lose/.test(p)), r.points);
   check('the missed exd2+ is named', r.points.some(p => /missed exd2\+/.test(p)), r.points);
+  const r2 = explainMove(f, uci(f, 'Qxe2'), { cls: 'miss', drop: 3, mateIn: 6, bestUci: uci(f, 'exd2+'), bestLine: ['e3d2', 'e2e3', 'c5e3', 'e1e3', 'd3e3', 'f1f2', 'd2d1q', 'b3d1'], afterLine: ['e1e2', 'e3d2', 'e2f2', 'h8e8', 'h2h4', 'e4f3'] });
+  check('a let-go mate is named, and the move still wins', r2.points.some(p => /^Still winning, but you had a forced mate in 6: 20…exd2\+ 21\.Qe3/.test(p)), r2.points);
 }
 // 13. a piece already under attack, and the move does not save it
 {

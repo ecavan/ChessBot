@@ -151,7 +151,7 @@ const worth = (g) => (g >= 8 ? 'the queen' : g >= 4.5 ? 'a rook' : g >= 2.5 ? 'a
  * Why a single move works (the tactic in it), described from the mover's side.
  * Returns a sentence or null.
  */
-export function motifOf(fen, uci, prevUci = null) {
+export function motifOf(fen, uci, prevUci = null, prevCaptured = null) {
   const r = tryMove(fen, uci);
   if (!r) return null;
   const { g, m } = r;
@@ -159,7 +159,9 @@ export function motifOf(fen, uci, prevUci = null) {
   const before = parse(fen);
   const me = m.color;
   if (g.isCheckmate()) return `${m.san} is checkmate.`;
-  const recapture = prevUci && prevUci.slice(2, 4) === m.to;
+  // taking back: the capture lands where his last move landed, and that move was itself a capture
+  // (a piece that merely moved there and gets taken was put en prise, not traded)
+  const recapture = prevUci && prevUci.slice(2, 4) === m.to && prevCaptured !== false;
   const fork = forkAt(after, m.to);
   if (fork && (fork.length >= 2)) {
     const pos = parse(after);
@@ -175,7 +177,7 @@ export function motifOf(fen, uci, prevUci = null) {
   const pos = parse(after);
   const fresh = lines(after, me).filter(l => !lines(fen, me).some(o => o.front === l.front && o.back === l.back))
     .filter(l => l.by === m.to || (pos[l.back].type === 'k' || pos[l.back].type === 'q') && pos[l.front].type !== 'p');
-  const pin = fresh.find(l => l.kind === 'pin');
+  const pin = fresh.find(l => l.kind === 'pin' && (pos[l.front].type !== 'p' || pos[l.back].type === 'k'));
   if (pin) return `${m.san} pins the ${NAME[pos[pin.front].type]} on ${pin.front} to the ${NAME[pos[pin.back].type]}${pos[pin.back].type === 'k' ? '' : ` on ${pin.back}`}.`;
   const skewer = fresh.find(l => l.kind === 'skewer');
   if (skewer) return `${m.san} skewers the ${NAME[pos[skewer.front].type]}: when it moves, the ${pn(pos, skewer.back)} falls.`;
@@ -396,7 +398,15 @@ export function explainMove(fen, uci, ctx = {}) {
     const loss = lineGain(fen, [uci, ...ref], me, 9);
     // the commonest reason at club level: a piece of yours is left where it can be taken
     const hung = loss.gain <= -1 ? hangingIn(fen, after, m, ref) : null;
-    const motif = motifOf(after, ref[0], uci);
+    let motif = motifOf(after, ref[0], uci, !!m.captured);
+    // when his reply takes a piece and the line loses material, the capture is the story, not a
+    // pin or an attack it happens to create on the way (a defended piece whose defender is pinned)
+    const cap = tryMove(after, ref[0])?.m;
+    if (cap?.captured && cap.captured !== 'p' && loss.gain <= -1 && !(motif && /takes|wins material|checkmate|forks/.test(motif))) {
+      const back = ref[1] ? tryMove(tryMove(after, ref[0]).g.fen(), ref[1])?.m : null;
+      const trade = back?.captured === cap.piece && back.to === cap.to && cap.captured === cap.piece;
+      motif = trade ? `${cap.san} trades ${NAME[cap.piece]}s.` : `${cap.san} takes the ${NAME[cap.captured]}.`;
+    }
     const why = hung || motif;
     const trade = why && /takes back/.test(why);
     const refSan = tryMove(after, ref[0])?.m.san;
@@ -406,15 +416,31 @@ export function explainMove(fen, uci, ctx = {}) {
     if (ref[0]) arrows.push({ from: ref[0].slice(0, 2), to: ref[0].slice(2, 4), color: 'rgba(244,63,94,.85)' });
   }
   const better = [];
-  if (bad && ctx.bestUci && ctx.bestUci !== uci) {
-    const bestWhy = motifOf(fen, ctx.bestUci);
+  // a mate let go: say so first, and say whether the move still wins
+  if (ctx.cls === 'miss' && ctx.mateIn > 0 && ctx.bestLine?.length) {
+    const n = ctx.mateIn;
+    const still = (ctx.wAfter ?? (100 - (ctx.drop ?? 100))) >= 80 && !ctx.afterMate;
+    better.push(`${still ? 'Still winning, but you had' : 'You had'} a forced mate in ${n}: ${lineText(fen, ctx.bestLine, Math.min(2 * n - 1, 7))}.`);
+  }
+  if (bad && ctx.bestUci && ctx.bestUci !== uci && better.length) arrows.push({ from: ctx.bestUci.slice(0, 2), to: ctx.bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
+  if (bad && ctx.bestUci && ctx.bestUci !== uci && !better.length) {
+    const bestWhy = motifOf(fen, ctx.bestUci, ctx.prevUci, ctx.prevCaptured);
     const gain = ctx.bestLine?.length ? lineGain(fen, ctx.bestLine, me) : { gain: 0 };
+    const lead = ctx.cls === 'miss' ? 'You missed' : 'Better was';
+    const line = ctx.bestLine?.length > 1 ? lineText(fen, ctx.bestLine, 5) : '';
+    const wins = gain.mate ? 'forces mate' : gain.gain >= 1.5 ? `wins ${worth(gain.gain)}` : null;
     if (bestWhy && /checkmate/.test(bestWhy)) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'You had'} ${bestSan}, checkmate!`);
-    else if (bestWhy && (gain.gain >= 1 || /forks|pins|skewers|uncovers/.test(bestWhy))) better.push(`${ctx.cls === 'miss' ? 'You missed' : 'Better was'} ${bestSan}, which ${bestWhy.replace(/^[^ ]+ /, '')}`);
+    else if (bestWhy && (gain.gain >= 1 || gain.mate || /forks|pins|skewers|uncovers/.test(bestWhy))) {
+      // the motif, and what it comes to over the line when that is more than the capture itself
+      const why = bestWhy.replace(/^[^ ]+ /, '').replace(/\.$/, '');
+      const more = wins && !/wins material/.test(bestWhy) && !(/takes/.test(bestWhy) && gain.gain < 2.5) ? `, and ${wins}` : '';
+      better.push(`${lead} ${bestSan}, which ${why}${more}${line && (more || gain.mate) ? `: ${line}` : '.'}`);
+    } else if (wins) better.push(`${lead} ${bestSan}, which ${wins}: ${line}.`);
+    else if (bestWhy) better.push(`${lead} ${bestSan}, which ${bestWhy.replace(/^[^ ]+ /, '')}`);
     else if (big) {
       const bp = tryMove(fen, ctx.bestUci);
       const bpr = bp ? principles(fen, bp.m, bp.g.fen(), ply) : { good: [] };
-      better.push(`Better was ${bestSan}${bpr.good[0] ? `, which ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : '.'}`);
+      better.push(`Better was ${bestSan}${bpr.good[0] ? `, which ${bpr.good[0].charAt(0).toLowerCase()}${bpr.good[0].slice(1)}` : line ? `: ${line}.` : '.'}`);
     }
     arrows.push({ from: ctx.bestUci.slice(0, 2), to: ctx.bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' });
   }
@@ -422,12 +448,12 @@ export function explainMove(fen, uci, ctx = {}) {
   // your move's own problem first, then what was better (so neither reads as describing the other)
   if (bad) { points.push(...pr.bad.slice(0, points.length ? 1 : 2).map(t => `Your move: ${t.charAt(0).toLowerCase()}${t.slice(1)}`)); points.push(...better); }
   else {
-    const t = motifOf(fen, uci, ctx.prevUci);
+    const t = motifOf(fen, uci, ctx.prevUci, ctx.prevCaptured);
     if (t && /forks|pins|skewers|uncovers|undefended|wins material|checkmate|takes back/.test(t)) points.push(t);
     points.push(...pr.good.slice(0, 2));
     if (!pr.good.length && pr.bad.length && ctx.cls !== 'best' && ctx.cls !== 'great' && ctx.cls !== 'brilliant') points.push(...pr.bad.slice(0, 1));
   }
-  if (bad && !points.length && bestSan) points.push(`${bestSan} was more accurate; the difference is positional and shows a few moves later.`);
+  if (bad && !points.length && bestSan) points.push(`${bestSan} was more accurate; the difference is positional and shows a few moves later${ctx.bestLine?.length > 1 ? `: ${lineText(fen, ctx.bestLine, 5)}` : ''}.`);
   const headline = ctx.cls ? {
     brilliant: 'Brilliant.', great: 'The only good move.', best: 'Best move.', excellent: 'Excellent.', good: 'Good move.', book: 'Book move.',
     inaccuracy: 'Inaccuracy.', mistake: 'Mistake.', miss: 'Missed chance.', blunder: 'Blunder.',

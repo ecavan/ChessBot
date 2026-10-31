@@ -145,7 +145,7 @@ export function classifyGame(positions, moves, isBook = () => false) {
     // a sound sacrifice, played when the game wasn't already won: the best move or close to it
     if (drop <= 3 && wBest < 90 && wAfter >= 45) { try { if (isSacrifice(before.fen, moves[i], after.lines?.[0]?.pv)) cls = 'brilliant'; } catch { /* ignore */ } }
     if (isBook(after.fen) && drop <= 5 && i < 30) cls = 'book';
-    out.push({ cls, drop, acc: moveAccuracy(bestCp, afterCp), wBest, wAfter, cpBest: bestCp, cpAfter: afterCp, source, bestUci: before.lines[0]?.pv?.[0], bestLine: before.lines[0]?.pv || [], afterLine: after.lines[0]?.pv || [] });
+    out.push({ cls, drop, acc: moveAccuracy(bestCp, afterCp), wBest, wAfter, cpBest: bestCp, cpAfter: afterCp, source, bestUci: before.lines[0]?.pv?.[0], bestLine: before.lines[0]?.pv || [], afterLine: after.lines[0]?.pv || [], mateIn: hadMate ? pov(before.lines[0].mate) : null });
     prevDrop = drop;
   }
   return out;

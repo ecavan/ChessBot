@@ -17,19 +17,19 @@ const worth = (g) => (g >= 8 ? 'the queen' : g >= 4.5 ? 'a rook' : g >= 2.5 ? 'a
 export function walkSteps(fen, pv, prevUci = null) {
   const g = new Chess(fen);
   const out = [];
-  let prev = prevUci;
+  let prev = prevUci, prevCaptured = null;
   for (const u of pv.slice(0, MAX)) {
     const before = g.fen();
     let m;
     try { m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { break; }
-    let note = motifOf(before, u, prev);
+    let note = motifOf(before, u, prev, prevCaptured);
     if (!note || /is a check that gains time/.test(note)) {
-      const ex = explainMove(before, u, { cls: 'best', prevUci: prev });
+      const ex = explainMove(before, u, { cls: 'best', prevUci: prev, prevCaptured });
       note = ex.points[0] ? `${m.san}: ${ex.points[0].charAt(0).toLowerCase()}${ex.points[0].slice(1)}` : note || (m.captured ? `${m.san} takes the ${({ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' })[m.captured]}.` : `${m.san}.`);
     }
     if (g.isCheckmate()) note = `${m.san} is checkmate.`;
     out.push({ before, after: g.fen(), move: m, note });
-    prev = u;
+    prev = u; prevCaptured = !!m.captured;
   }
   return out;
 }

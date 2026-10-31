@@ -17,15 +17,7 @@ export default function QueueCard({ compact = false }) {
   const unreviewed = games.filter(g => g.you && !g.review?.summary).length;
   const cur = q.progress ? getGame(q.progress.id) : null;
   const recent = st.lastResult;
-  if (!prefs.chesscom && !q.pending.length && !unreviewed) {
-    if (compact) return null;
-    return (
-      <div className="panel panel-pad flex items-center justify-between gap-3 flex-wrap">
-        <div><div className="text-white font-semibold">Link your chess.com username</div><div className="text-sm text-ink-300">New games come in by themselves when you open the app, reviewed and ready.</div></div>
-        <a className="btn btn-primary" href="#/settings">Settings</a>
-      </div>
-    );
-  }
+  if (!prefs.chesscom && !q.pending.length && !unreviewed) return <ConnectCard />;
   async function doSync() {
     setBusy(true); setMsg(null);
     const r = await sync({ manual: true });
@@ -45,6 +37,7 @@ export default function QueueCard({ compact = false }) {
           </div>
           <div className="text-xs text-ink-300">
             {q.progress ? `${q.progress.done}/${q.progress.total} positions · ${q.pending.length - 1 > 0 ? `${q.pending.length - 1} more waiting · ` : ''}reviews run while the app is open` : recent?.at ? `chess.com checked ${ago(recent.at)}${recent.added ? ` · ${recent.added} new` : ''}${recent.error ? ` · ${recent.error}` : ''}` : prefs.chesscom ? 'Sync runs when you open the app.' : ''}
+            {prefs.chesscom && !q.progress ? <> · <span className="text-ink-200">{prefs.chesscom}</span> <a className="underline" href="#/settings">change</a></> : null}
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -65,6 +58,48 @@ export default function QueueCard({ compact = false }) {
         <div className="text-xs text-ink-400 truncate">Next: {q.pending.slice(q.progress ? 1 : 0, 4).map(id => getGame(id)).filter(Boolean).map(g => <a key={g.id} className="underline mr-2" href={href(`/review/game/${encodeURIComponent(g.id)}`)}>vs {g.you === 'w' ? g.black : g.white}</a>)}</div>
       )}
     </div>
+  );
+}
+
+/**
+ * The first step for a new person: link a chess.com account. chess.com has no sign-in for outside
+ * apps, and none is needed: the public API serves anyone's games by username, so the username is
+ * the account. It is remembered on this device, new games come in whenever the app opens, and
+ * each is reviewed in the background.
+ */
+export function ConnectCard() {
+  const [, setPrefs] = usePrefs();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  async function connect(e) {
+    e?.preventDefault?.();
+    const user = name.trim();
+    if (!user) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user.toLowerCase())}`);
+      if (r.status === 404) { setErr(`No chess.com player called "${user}".`); setBusy(false); return; }
+      if (!r.ok) { setErr('chess.com did not answer. Try again in a minute.'); setBusy(false); return; }
+      const p = await r.json();
+      setPrefs({ chesscom: p.username || user, syncAuto: true, syncBackfillMonths: 2 });
+      const s = await sync({ manual: true });
+      if (s.error && s.error !== 'off') setErr(s.error);
+      enqueueUnreviewed();
+    } catch { setErr('Could not reach chess.com. Check your connection.'); }
+    setBusy(false);
+  }
+  return (
+    <form className="panel panel-pad space-y-2" onSubmit={connect}>
+      <div className="text-white font-semibold">Connect your chess.com account</div>
+      <div className="text-sm text-ink-300">Your recent games appear here and get reviewed by themselves whenever you open the app: tap one to see every mistake explained. Just the username — no password, nothing is sent anywhere but chess.com.</div>
+      <div className="flex gap-2 flex-wrap">
+        <input type="text" className="flex-1 min-w-[180px]" placeholder="chess.com username" value={name} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(e) => setName(e.target.value)} />
+        <button type="submit" className="btn btn-primary" disabled={!name.trim() || busy}>{busy ? <Spinner size={12} /> : null}Connect</button>
+      </div>
+      {err && <div className="text-sm text-rose-300">{err}</div>}
+      <div className="text-xs text-ink-400">Lichess, or a PGN file: <a className="underline" href="#/review/import">Import</a>.</div>
+    </form>
   );
 }
 
