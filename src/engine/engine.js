@@ -20,6 +20,12 @@ const FILES = {
 };
 
 let threadsBroken = false;
+/** The last 60 engine events (boots, failures, restarts), for Settings → Diagnostics. */
+export const engineLog = [];
+export function logEvent(msg) {
+  engineLog.push(`${new Date().toISOString().slice(11, 19)} ${msg}`);
+  if (engineLog.length > 60) engineLog.shift();
+}
 export const canThread = () => !threadsBroken && typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true;
 /** A thread worker that fails to start makes the loader print this and try again, without end. */
 const THREAD_FAIL = /^worker sent an (error!|unknown command)/;
@@ -75,7 +81,11 @@ class Worker1 {
     });
   }
   async init() {
-    this.w.onerror = (e) => { this.dead = true; for (const l of [...this.listeners]) l('__error__ ' + (e.message || 'worker error')); };
+    logEvent(`${this.flavor}: starting (${this.threads} thread${this.threads === 1 ? '' : 's'})`);
+    this.w.onerror = (e) => { this.dead = true; logEvent(`${this.flavor}: worker error ${e.message || ''}`); for (const l of [...this.listeners]) l('__error__ ' + (e.message || 'worker error')); };
+    try { await this.initInner(); logEvent(`${this.flavor}: ready`); } catch (e) { logEvent(`${this.flavor}: failed: ${e.message || e}`); throw e; }
+  }
+  async initInner() {
     // the full network is ~75 MB; on a slow link or a cold cache this takes minutes, so wait generously
     const ok = this.waitFor(l => l === 'uciok' || l.startsWith('__error__'), this.flavor.startsWith('full') ? 600000 : 180000);
     this.send('uci');
@@ -90,11 +100,31 @@ class Worker1 {
     }
     if (this.threads === 1) this.send('setoption name Threads value 1');
     this.send('setoption name Hash value 64');
-    const ready = this.waitFor(l => l === 'readyok', 60000);
+    // a threaded build whose threads hang without an error line never answers: give it 25 s, then
+    // the manager falls back to one thread
+    const ready = this.waitFor(l => l === 'readyok', this.threads > 1 ? 25000 : 60000);
     this.send('isready');
     await ready;
   }
   terminate() { this.dead = true; this.w.terminate(); }
+}
+
+/** What this device can do and what the engine has done so far: for Settings → Diagnostics. */
+export function diagnostics(status) {
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  return {
+    build: typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev',
+    engine: status,
+    crossOriginIsolated: typeof self !== 'undefined' ? self.crossOriginIsolated : null,
+    sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+    threadsBroken,
+    cores: nav.hardwareConcurrency ?? null,
+    deviceMemory: nav.deviceMemory ?? null,
+    standalone: typeof window !== 'undefined' ? (window.matchMedia?.('(display-mode: standalone)')?.matches || nav.standalone === true) : null,
+    online: nav.onLine,
+    ua: nav.userAgent,
+    log: [...engineLog],
+  };
 }
 
 class EngineManager {
@@ -139,7 +169,7 @@ class EngineManager {
       const lite = new Worker1(flavor);
       try { await lite.init(); } catch (e) {
         lite.terminate();
-        if (flavor.endsWith('-mt') && this.threadsFailed(e)) return boot(single(flavor));
+        if (flavor.endsWith('-mt')) { this.threadsFailed(e, true); return boot(single(flavor)); }
         throw e;
       }
       if (this.worker) { lite.terminate(); return; } // full got there first
@@ -155,8 +185,9 @@ class EngineManager {
   }
 
   /** A multi-threaded worker whose threads could not start: use one thread for the rest of the session. */
-  threadsFailed(e) {
-    if (!/__error__ threads/.test(String(e?.message || e))) return false;
+  threadsFailed(e, any = false) {
+    if (!any && !/__error__ threads/.test(String(e?.message || e))) return false;
+    if (!threadsBroken) logEvent(`threads unusable on this device (${String(e?.message || e).slice(0, 60)}): one thread from now on`);
     threadsBroken = true;
     return true;
   }
@@ -177,6 +208,7 @@ class EngineManager {
     if (err) this.threadsFailed(err);
     if (this.next) { this.swap(); return; }
     this.recoveries = (this.recoveries || 0) + 1;
+    logEvent(`${dead.flavor}: stopped (${String(err?.message || err || 'no reason').slice(0, 80)}); restart ${this.recoveries}`);
     if (this.recoveries > 3) {
       this.status = { ...this.status, flavor: null, loading: null, error: 'The engine keeps stopping. Reload the app to try again.' };
       this.emit();
@@ -203,7 +235,8 @@ class EngineManager {
       const full = new Worker1(flavor);
       try { await full.init(); } catch (e) {
         full.terminate();
-        if (flavor.endsWith('-mt') && this.threadsFailed(e)) {
+        if (flavor.endsWith('-mt')) {
+          this.threadsFailed(e, true);
           this.status = { ...this.status, loading: null };
           return this.upgrade(single(flavor));
         }
@@ -213,6 +246,7 @@ class EngineManager {
       if (!this.running) this.swap();
     } catch (e) {
       this.fullTried++;
+      logEvent(`${flavor}: not available (${String(e.message || e).slice(0, 80)})`);
       this.status = { ...this.status, loading: null, error: `Full engine failed to load: ${e.message || e}` };
       this.emit();
       // one more go after a pause (a stalled download usually completes the second time)

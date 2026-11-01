@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { usePrefs, DEFAULT_PREFS } from '../lib/prefs.js';
 import { BOARDS, PIECE_SETS } from '../lib/themes.js';
 import { useEngineStatus } from '../engine/useEngine.js';
+import { diagnostics } from '../engine/engine.js';
 import { FLAVOR_NAME, canThread } from '../engine/engine.js';
 import { Toggle, Seg, Sheet } from '../ui/kit.jsx';
 import { clearGames, allGames } from '../lib/games.js';
@@ -98,6 +99,7 @@ export default function Settings() {
         {!st.flavor?.startsWith('full') && prefs.engine === 'full' && !st.loading && <p className="text-xs text-amber-200">Reviews made on the lite network are marked "rough" and don't count toward your level; they are re-reviewed when the full engine is available.</p>}
         <Seg value={prefs.engine} onChange={(v) => setPrefs({ engine: v })} options={[['full', 'Full strength'], ['lite', 'Lite (small download)']]} />
         <EngineCheck />
+        <Diagnostics st={st} />
         <p className="text-xs text-ink-400">
           Full is Stockfish 17.1 with its complete neural network, the engine the big sites use for their analysis;
           {canThread() ? ' it uses several cores here.' : ' this browser only allows one thread.'} The app starts on the lite network and switches automatically
@@ -163,6 +165,33 @@ export default function Settings() {
 }
 
 /** Run a 3-second search and report how strong this device's engine is, and whether it works offline. */
+/** What this device can do and what the engine did: copy it into a bug report. */
+function Diagnostics({ st }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const d = diagnostics(st);
+  const text = [
+    `Build ${d.build}`,
+    `Engine: ${d.engine.flavor || 'none'}${d.engine.threads > 1 ? ` · ${d.engine.threads} threads` : ''}${d.engine.loading ? ` · loading ${d.engine.loading}` : ''}${d.engine.error ? ` · error: ${d.engine.error}` : ''}`,
+    `Isolated ${d.crossOriginIsolated} · SharedArrayBuffer ${d.sharedArrayBuffer} · threads broken ${d.threadsBroken} · cores ${d.cores} · memory ${d.deviceMemory ?? '?'} GB · standalone ${d.standalone} · online ${d.online}`,
+    `UA ${d.ua}`,
+    'Log:', ...d.log,
+  ].join('\n');
+  return (
+    <div className="rounded-xl border border-ink-700/70 bg-ink-850 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-white">Diagnostics <span className="text-xs text-ink-400 font-normal">build {d.build}</span></span>
+        <div className="flex gap-2">
+          <button className="btn btn-sm" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Show'}</button>
+          <button className="btn btn-sm" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? 'Copied' : 'Copy'}</button>
+        </div>
+      </div>
+      {open && <pre className="text-[11px] leading-snug text-ink-300 whitespace-pre-wrap break-words max-h-64 overflow-auto">{text}</pre>}
+      <p className="text-xs text-ink-400">If the engine or a review misbehaves, Copy this and send it along with what you saw.</p>
+    </div>
+  );
+}
+
 function EngineCheck() {
   const [res, setRes] = useState(null);
   const [cache, setCache] = useState(null);

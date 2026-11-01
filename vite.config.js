@@ -7,6 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
 
 export default defineConfig({
+  define: { __BUILD__: JSON.stringify(`${(process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7)} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`) },
   server: { headers: ISOLATION },
   preview: { headers: ISOLATION },
   plugins: [

@@ -15,7 +15,7 @@ import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
 import { explainMove } from '../lib/coach.js';
 import { WalkPanel, walkBoard, makeWalk } from '../ui/LineWalk.jsx';
 import { engine } from '../engine/engine.js';
-import { useLiveEval } from '../engine/useEngine.js';
+import { useLiveEval, useEngineStatus } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
 import { href, go } from '../lib/router.js';
 import { moveSound } from '../lib/sound.js';
@@ -189,8 +189,32 @@ function explain(c, move, fenBefore, bestSan, mover) {
   }
 }
 
+/** What the engine is doing under a progress bar, and a way out when the count has stopped moving. */
+function EngineLine({ est, stuck, onRetry, onLite }) {
+  const name = est.flavor ? (est.flavor.startsWith('full') ? 'full network' : 'lite network') + (est.threads > 1 ? `, ${est.threads} threads` : '') : null;
+  return (
+    <div className="text-xs space-y-1">
+      <div className="text-ink-400">
+        Engine: {name ? <span className="text-ink-200">{name}</span> : <span className="text-amber-200">starting…</span>}
+        {est.loading ? <span className="text-amber-200"> · downloading the full network (about 75 MB, once)</span> : null}
+        {est.error ? <span className="text-rose-300"> · {est.error}</span> : null}
+      </div>
+      {stuck && (
+        <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-amber-100 space-y-1.5">
+          <div>Nothing has happened for 30 seconds. The engine may have stopped on this device.</div>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn btn-sm" onClick={onRetry}>Try again</button>
+            <button className="btn btn-sm" onClick={onLite}>Restart on the lite engine</button>
+            <a className="btn btn-sm" href="#/settings">Diagnostics</a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GameReview({ id, auto, startPly = null }) {
-  const [prefs] = usePrefs();
+  const [prefs, setPrefs] = usePrefs();
   const games = useGames();
   const game = games.find(g => g.id === id);
   const stage = useStage({ evalBar: true });
@@ -200,6 +224,16 @@ function GameReview({ id, auto, startPly = null }) {
   const [flip, setFlip] = useState(false);
   const [prog, setProg] = useState(null); // { done, total }
   const [engineOn, setEngineOn] = useState(false);
+  const est = useEngineStatus();
+  // watchdog: a review whose count has not moved for 30 s is stuck (the engine died or never started)
+  const [stuck, setStuck] = useState(false);
+  const liveProg = prog || queued;
+  useEffect(() => {
+    setStuck(false);
+    if (!liveProg) return undefined;
+    const t = setTimeout(() => setStuck(true), 30000);
+    return () => clearTimeout(t);
+  }, [liveProg?.done, liveProg?.total, !!liveProg]); // eslint-disable-line react-hooks/exhaustive-deps
   const [retry, setRetry] = useState(null); // { list: [moveIdx], i, status, tried }
   const [walk, setWalk] = useState(null);
   const [walkI, setWalkI] = useState(0);
@@ -327,12 +361,14 @@ function GameReview({ id, auto, startPly = null }) {
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Stockfish is reviewing the game</span><span className="num text-ink-300">{prog.done}/{prog.total}</span></div>
           <Progress value={(prog.done / prog.total) * 100} />
           <div className="text-xs text-ink-400">{(prefs.analysisTime / 1000).toFixed(1)} s per position, two lines each. You can leave; it continues where it stopped.</div>
+          <EngineLine est={est} stuck={stuck} onRetry={() => { cancelled.current = true; engine.cancel(['review']); setTimeout(() => analyze(), 300); }} onLite={() => { setPrefs({ engine: 'lite' }); location.reload(); }} />
         </div>
       ) : !full && queued ? (
         <div className="panel panel-pad space-y-2">
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Reviewing in the background</span><span className="num text-ink-300">{queued.done}/{queued.total}</span></div>
           <Progress value={(queued.done / Math.max(1, queued.total)) * 100} />
           <div className="text-xs text-ink-400">It carries on while you do other things here, and resumes if you leave.</div>
+          <EngineLine est={est} stuck={stuck} onRetry={() => { pause(); setTimeout(() => analyze(), 300); }} onLite={() => { setPrefs({ engine: 'lite' }); location.reload(); }} />
         </div>
       ) : !full ? (
         <div className="panel panel-pad space-y-3">
