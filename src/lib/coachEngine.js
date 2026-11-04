@@ -54,12 +54,13 @@ export async function judgeMove(fen, uci, before = null, ms = 700) {
 }
 
 /** What does the side NOT to move threaten? (a "null move" search). */
-export async function threatNow(fen, current = null) {
+export async function threatNow(fen, current = null, alive = () => true) {
   const nf = nullFen(fen);
   if (!nf) return null;
   const them = nf.split(' ')[1];
   const sgn = them === 'w' ? 1 : -1;
   const cur = current?.lines?.[0] ? current : await search(fen, 450);
+  if (!alive()) return null; // you've moved on: don't queue the second search behind your move
   const t = await search(nf, 650);
   if (!cur?.lines?.[0] || !t?.lines?.[0]?.pv?.length) return null;
   const gain = sgn * (cpOf(t.lines[0]) - cpOf(cur.lines[0]));

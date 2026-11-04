@@ -193,6 +193,7 @@ function PlayGame() {
   const [botRetry, setBotRetry] = useState(0);
   const token = useRef(0);
   const guardEval = useRef({});
+  const guardJob = useRef(null); // the background check in flight: { fen, p }
   const stage = useStage({ evalBar: prefs.playEval });
 
   useEffect(() => { loadBook(); }, []);
@@ -259,7 +260,9 @@ function PlayGame() {
   useEffect(() => {
     if (!(prefs.playGuard || prefs.playCoach) || !yourTurn) return;
     const f = fen;
-    engine.search({ fen: f, movetime: 1200, multipv: 2, tag: 'guard', preempt: true, stops: ['eval'] }).then(r => { if (r?.lines?.length >= 2 && !r.stopped) guardEval.current = { fen: f, res: r }; });
+    const p = engine.search({ fen: f, movetime: 1200, multipv: 2, tag: 'guard', preempt: true, stops: ['eval'] });
+    guardJob.current = { fen: f, p };
+    p.then(r => { if (r?.lines?.length >= 2 && !r.stopped) guardEval.current = { fen: f, res: r }; });
   }, [fen, yourTurn, prefs.playGuard, prefs.playCoach]);
 
   // coach: after the bot moves, is there a threat?
@@ -267,7 +270,7 @@ function PlayGame() {
     if (!prefs.playCoach || !yourTurn || !nav.live || moves.length === 0) return undefined;
     let alive = true;
     const f = fen;
-    threatNow(f).then(t => { if (alive && fenRef.current === f) setThreat(t); });
+    threatNow(f, null, () => alive).then(t => { if (alive && fenRef.current === f) setThreat(t); });
     return () => { alive = false; };
   }, [fen, yourTurn, prefs.playCoach]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -300,8 +303,17 @@ function PlayGame() {
     setThreat(null); setPlan(null);
     if ((prefs.playGuard || prefs.playCoach) && !c.isGameOver()) {
       setPending({ uci, checking: true });
-      const before = guardEval.current.fen === fen ? guardEval.current.res : null;
-      const j = await judgeMove(fen, uci, before, 600);
+      // a fast move: don't make it wait behind searches that no longer matter
+      engine.cancel(['coach']); // the threat / plan for the position you just left
+      let before = guardEval.current.fen === fen ? guardEval.current.res : null;
+      if (!before && guardJob.current?.fen === fen) {
+        // the background check of this position is still running: stop it and use what it found
+        engine.cancel(['guard']);
+        const r = await guardJob.current.p;
+        if (r?.lines?.length >= 2 && Math.min(r.lines[0].depth || 0, r.lines[1].depth || 0) >= 10) before = r;
+      }
+      if (epoch.current !== ep) return true;
+      const j = await judgeMove(fen, uci, before, 500);
       if (epoch.current !== ep) return true;
       if (prefs.playCoach && j) { setCoachCard({ ...j, moveNo, fen }); setWalk(null); }
       if (prefs.playGuard && j && j.wBefore - j.wAfter >= 18 && j.wAfter < 60) { setPending({ uci, checking: false, wb: j.wBefore, wa: j.wAfter }); return true; }

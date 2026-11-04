@@ -55,7 +55,7 @@ export async function botMove(bot, fen, { tag = 'bot', stops = ['eval', 'hint', 
     const fens = uci ? fensFromUci(startFen, uci) : [fen];
     if (fens[fens.length - 1].split(' ').slice(0, 4).join(' ') !== fen.split(' ').slice(0, 4).join(' ')) fens.push(fen);
     if (!new Chess(fen).moves().length) return null;
-    const [{ moves }] = await Promise.all([maiaPredict(bot.maia, fens), new Promise(r => setTimeout(r, 400 + Math.random() * 600))]);
+    const [{ moves }] = await Promise.all([maiaPredict(bot.maia, fens), new Promise(r => setTimeout(r, 300 + Math.random() * 500))]);
     // sample by the model's probabilities: it varies like a person does
     let x = Math.random();
     for (const m of moves) { x -= m.p; if (x <= 0) return m.uci; }
