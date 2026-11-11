@@ -72,7 +72,7 @@ export default function App() {
         <div className="flex items-center justify-between gap-3 px-4 sm:px-5 h-[52px] md:h-14 max-w-[1500px] mx-auto">
           <a href="#/" className="flex items-center gap-2.5 shrink-0">
             <img src="/icon.svg" alt="" className="w-8 h-8 rounded-[9px] shadow-card" />
-            <span className="font-semibold text-white tracking-tight hidden sm:block">Chess Trainer</span>
+            <span className="font-semibold text-white tracking-tight hidden lg:block">Chess Trainer</span>
           </a>
           <nav className="tabbar-top">
             {TABS.map(([k, label]) => <a key={k} href={`#/${k}`} className={sec === k ? 'on' : ''}>{label}</a>)}
@@ -99,8 +99,8 @@ function EnginePill() {
   return (
     <a href={href('/settings')} className="pill !py-1.5 hidden sm:inline-flex" title={st.flavor ? FLAVOR_NAME[st.flavor] : 'Starting engine'}>
       {st.loading ? <Spinner size={12} /> : <span className={`w-2 h-2 rounded-full ${st.error ? 'bg-rose-500' : full ? 'bg-emerald-400' : 'bg-amber-400'}`} />}
-      <span>SF 17.1</span>
-      <span className="text-ink-300 font-medium">{st.loading && !full ? 'loading full…' : full ? `full${st.threads > 1 ? ` · ${st.threads} threads` : ''}` : st.flavor ? (st.error ? 'lite · full failed' : 'lite') : '…'}</span>
+      <span className="whitespace-nowrap">SF 17.1</span>
+      <span className="text-ink-300 font-medium whitespace-nowrap hidden lg:inline">{st.loading && !full ? 'loading full…' : full ? `full${st.threads > 1 ? ` · ${st.threads} threads` : ''}` : st.flavor ? (st.error ? 'lite · full failed' : 'lite') : '…'}</span>
     </a>
   );
 }

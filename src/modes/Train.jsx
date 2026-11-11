@@ -58,7 +58,7 @@ function Hub() {
     const mine = myRep.includes(c.id);
     return (
       <div key={c.id} className={`card-link !p-4 flex flex-col relative ${mine ? '!border-emerald-700/60' : ''}`}>
-        <button className={`absolute top-2 right-2 w-8 h-8 rounded-lg text-lg ${mine ? 'text-amber-300' : 'text-ink-500 hover:text-ink-200'}`} title={mine ? 'In your repertoire' : 'Add to your repertoire'} onClick={(e) => { e.preventDefault(); toggleRep(c.id); }}>{mine ? '★' : '☆'}</button>
+        <button className={`absolute top-2 right-2 w-10 h-10 rounded-lg text-lg ${mine ? 'text-amber-300' : 'text-ink-500 hover:text-ink-200'}`} title={mine ? 'In your repertoire' : 'Add to your repertoire'} onClick={(e) => { e.preventDefault(); toggleRep(c.id); }}>{mine ? '★' : '☆'}</button>
         <a href={`#/train/openings/${c.id}`} className="flex flex-col flex-1">
           <div className="flex items-center justify-between gap-2 pr-8">
             <span className="font-semibold text-white">{c.name}</span>

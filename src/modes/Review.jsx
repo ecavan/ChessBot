@@ -379,9 +379,36 @@ function GameReview({ id, auto, startPly = null }) {
       ) : retry ? (
         <RetryPanel retry={retry} setRetry={setRetry} cls={cls} moves={moves} fens={fens} moverOf={moverOf} setPly={setPly} />
       ) : (
-        <>
-          <Summary game={game} sum={sum} />
-          <div className="panel p-2"><EvalGraph wins={wins} marks={marks} ply={cur} onJump={jump} /></div>
+        (() => {
+          // The report (accuracy, grades, key moments) is the first screen; once you step into
+          // the game it folds into one line so the coach's note on the move is what you see.
+          const graph = <div className="panel p-2"><EvalGraph wins={wins} marks={marks} ply={cur} onJump={jump} /></div>;
+          const retryBtn = retryable.length > 0 && (
+            <button className="btn btn-block !border-amber-600/60 !bg-amber-950/40 !text-amber-100" onClick={() => setRetry({ list: retryable, i: 0, status: 'play' })}>
+              Retry {game.you ? 'your' : 'the'} mistakes ({retryable.length})
+            </button>
+          );
+          if (cur === 0) return (
+            <>
+              <Summary game={game} sum={sum} />
+              {len > 0 && <button className="btn btn-primary btn-block btn-lg" onClick={() => jump(1)}>Start review ▶</button>}
+              {keyMoments.length > 0 && (
+                <div className="panel panel-pad">
+                  <div className="h-sec mb-2">Key moments{game.you ? ' (yours)' : ''}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {keyMoments.slice(0, 16).map(k => (
+                      <button key={k.i} className="btn btn-sm" onClick={() => jump(k.i + 1)}><ClsDot cls={k.cls} size={16} />{moveNo(k.i)} {moves[k.i].san}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {retryBtn}
+              {graph}
+            </>
+          );
+          const bar = <SummaryBar game={game} sum={sum} onOpen={() => jump(0)} />;
+          const note = (
+            <>
           {c && mv && (
             <div className="panel panel-pad fade-up" key={cur}>
               <div className="flex items-center gap-2">
@@ -406,22 +433,12 @@ function GameReview({ id, auto, startPly = null }) {
               </div>
             </div>
           )}
-          {cur === 0 && keyMoments.length > 0 && (
-            <div className="panel panel-pad">
-              <div className="h-sec mb-2">Key moments{game.you ? ' (yours)' : ''}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {keyMoments.slice(0, 16).map(k => (
-                  <button key={k.i} className="btn btn-sm" onClick={() => jump(k.i + 1)}><ClsDot cls={k.cls} size={16} />{moveNo(k.i)} {moves[k.i].san}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          {retryable.length > 0 && (
-            <button className="btn btn-block !border-amber-600/60 !bg-amber-950/40 !text-amber-100" onClick={() => setRetry({ list: retryable, i: 0, status: 'play' })}>
-              Retry {game.you ? 'your' : 'the'} mistakes ({retryable.length})
-            </button>
-          )}
-        </>
+            </>
+          );
+          return stage.portrait
+            ? <>{note}{graph}{cur >= len && retryBtn}{bar}</>
+            : <>{bar}{graph}{note}{cur >= len && retryBtn}</>;
+        })()
       )}
 
       {!retry && (
@@ -437,7 +454,7 @@ function GameReview({ id, auto, startPly = null }) {
               <div className="text-[10px] text-ink-400">depth {live.lines[0].depth}{live.settling && live.depth > live.lines[0].depth ? ` · thinking (${live.depth})…` : live.done ? ' · done' : ''}</div>
             </div>
           )}
-          {!stage.portrait && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
+          {!stage.portrait && <div className="nav-pin"><NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} /></div>}
           <div className="grid grid-cols-3 gap-2">
             <button className={`btn ${engineOn ? 'on' : ''}`} onClick={() => setEngineOn(v => !v)} disabled={!!prog}>Engine</button>
             <a className="btn" href={href('/train/scratch', { fen: fens[cur] })}>Explore</a>
@@ -510,6 +527,23 @@ function Summary({ game, sum }) {
       </div>
       {sum.opening && <div className="text-xs text-ink-300 mt-3 text-center">{sum.opening.eco} · {sum.opening.name}</div>}
     </div>
+  );
+}
+
+/** The report in one line while you step through the game; tap it to go back to the report. */
+function SummaryBar({ game, sum, onOpen }) {
+  const side = (c) => (
+    <span className="min-w-0 flex items-baseline gap-1.5">
+      <span className="truncate text-ink-300">{c === 'w' ? game.white : game.black}</span>
+      <b className="num text-white">{sum.acc[c]?.toFixed(1) ?? '–'}</b>
+      {sum.est?.[c] ? <span className="num text-xs text-ink-400">{sum.est[c]}</span> : null}
+    </span>
+  );
+  return (
+    <button className="panel px-3.5 py-2.5 flex items-center gap-3 text-sm text-left w-full hover:border-ink-500 transition" onClick={onOpen} aria-label="Back to the game report">
+      {side('w')}<span className="text-ink-500">·</span>{side('b')}
+      <span className="ml-auto shrink-0 text-xs font-semibold text-ink-300">Report ▸</span>
+    </button>
   );
 }
 
