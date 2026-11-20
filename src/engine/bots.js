@@ -24,30 +24,34 @@ import { maiaPredict } from './maiaClient.js';
 
 const human = (elo, maia, temp, name, icon, blurb) => ({ id: `h${elo}`, elo, maia, temp, name, icon, blurb, human: true });
 const sf = (elo, uciElo, name, icon, blurb) => ({ id: `e${elo}`, elo, uciElo, name, icon, blurb });
-// PROVISIONAL settings: the matches that space the rungs are still running (see docs/BOTS.md once written).
+// rating, Maia level, temperature: read off the measured strength of each setting (docs/BOTS.md)
 export const BOTS = [
-  human(200, 1100, 2.5, 'Pawnstorm Pete', '🐣', 'Just learned how the pieces move.'),
-  human(300, 1100, 2, 'Casual Cam', '🙂', 'Knows the rules, hangs pieces.'),
-  human(400, 1100, 1.25, 'Club Night Kim', '😎', 'Sees one-move threats, mostly.'),
-  human(500, 1100, 1, 'Improving Ivy', '📚', 'Takes what you leave hanging.'),
-  human(600, 1100, 0.7, 'Tactical Tom', '⚔️', 'Finds forks, plays fast.'),
-  human(800, 1300, 1, 'Steady Sam', '🧑', 'Fewer gifts. Still misses tactics.'),
-  human(1000, 1500, 1, 'Rapid Rosa', '⏱️', 'A decent club player.'),
-  human(1200, 1700, 1, 'Positional Pia', '🧭', 'Plans, pawn structure, patience.'),
-  human(1400, 1900, 0.7, 'Expert Elena', '🎯', 'Few mistakes. Punishes yours.'),
-  sf(1600, 1600, 'Engine 1600', '🤖', 'Stockfish held to about 1600.'),
-  sf(1800, 1800, 'Engine 1800', '🤖', 'Stockfish held to about 1800.'),
-  sf(2000, 2000, 'Candidate Master', '🏅', 'Strong everywhere.'),
-  sf(2200, 2200, 'National Master', '🎖️', 'Rarely blunders.'),
-  sf(2500, 2500, 'Grandmaster', '👑', 'Grandmaster strength.'),
-  sf(2800, 2800, 'World Champion', '🏆', 'Top-player strength.'),
+  human(200, 1100, 2.6, 'Pawnstorm Pete', '🐣', 'Just learned how the pieces move.'),
+  human(300, 1100, 2.35, 'Casual Cam', '🙂', 'Knows the rules, hangs pieces.'),
+  human(400, 1100, 2.0, 'Weekend Wes', '🧢', 'Takes what is free, when he sees it.'),
+  human(500, 1100, 1.85, 'Club Night Kim', '😎', 'Sees one-move threats, mostly.'),
+  human(600, 1100, 1.7, 'Lunch Break Lou', '🥪', 'Develops, castles, then drifts.'),
+  human(700, 1100, 1.53, 'Improving Ivy', '📚', 'Solid basics, misses tactics.'),
+  human(800, 1100, 1.3, 'Steady Sam', '🧑', 'Fewer gifts. Still walks into forks.'),
+  human(900, 1100, 1.05, 'Tactical Tom', '⚔️', 'Finds forks, plays fast.'),
+  human(1000, 1100, 0.84, 'Rapid Rosa', '⏱️', 'A decent club player.'),
+  human(1100, 1100, 0.55, 'Careful Cora', '🔎', 'Checks for threats before moving.'),
+  human(1200, 1500, 0.7, 'Positional Pia', '🧭', 'Plans, pawn structure, patience.'),
+  human(1300, 1900, 0.32, 'Tournament Tess', '🏟️', 'Plays the main moves and waits for yours.'),
+  human(1400, 1900, 0.1, 'Expert Elena', '🎯', 'Few mistakes. Punishes yours.'),
+  sf(1600, 2000, 'Engine 1600', '🤖', 'Stockfish held to about 1600.'),
+  sf(1800, 2200, 'Engine 1800', '🤖', 'Stockfish held to about 1800.'),
+  sf(2000, 2400, 'Candidate Master', '🏅', 'Strong everywhere.'),
+  sf(2200, 2550, 'National Master', '🎖️', 'Rarely blunders.'),
+  sf(2500, 2800, 'Grandmaster', '👑', 'Grandmaster strength.'),
+  sf(2800, 3050, 'World Champion', '🏆', 'Top-player strength.'),
   { id: 'max', elo: 3500, name: 'Stockfish 17.1', icon: '🐟', blurb: 'Full strength. Every thread, the full network.', max: true },
 ];
 export const HUMAN_BOTS = BOTS.filter(b => b.human);
 export const ENGINE_BOTS = BOTS.filter(b => !b.human);
 export const ALL_BOTS = BOTS;
 /** Bots from before the ladder was re-measured, by the rung that plays most like them now. */
-const LEGACY = { b400: 'h400', b600: 'h500', b800: 'h500', b1000: 'h1000', b1200: 'h1200', b1400: 'h1400', b1600: 'e1600', b1800: 'e1800', b2000: 'e2000', b2200: 'e2200', b2500: 'e2500', b2800: 'e2800', maia1100: 'h500', maia1300: 'h800', maia1500: 'h1000', maia1700: 'h1200', maia1900: 'h1400' };
+const LEGACY = { b400: 'h400', b600: 'h600', b800: 'h800', b1000: 'h1000', b1200: 'h1200', b1400: 'h1000', b1600: 'h1200', b1800: 'h1400', b2000: 'e1600', b2200: 'e1800', b2500: 'e2200', b2800: 'e2500', maia1100: 'h900', maia1300: 'h900', maia1500: 'h1100', maia1700: 'h1100', maia1900: 'h1000' };
 export const botById = (id) => BOTS.find(b => b.id === id) || BOTS.find(b => b.id === LEGACY[id]) || BOTS.find(b => b.elo === 400) || BOTS[0];
 /** The rung closest to a rating (your chess.com rating, say). */
 export const botNear = (rating) => BOTS.filter(b => !b.max).reduce((a, b) => (Math.abs(b.elo - rating) < Math.abs(a.elo - rating) ? b : a));

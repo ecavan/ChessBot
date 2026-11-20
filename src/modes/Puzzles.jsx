@@ -359,7 +359,7 @@ function HumanFound({ fen, uci }) {
   if (!r) return null;
   const pct = (p) => `${Math.round(100 * p)}%`;
   const hard = r[0] < 0.15 ? 'A hard one: ' : r[0] > 0.5 ? 'A natural one: ' : '';
-  return <div className="text-xs text-ink-400 px-1">{hard}found by <span className="text-ink-200">{pct(r[0])}</span> of 1500s and <span className="text-ink-200">{pct(r[1])}</span> of 1900s (Maia).</div>;
+  return <div className="text-xs text-ink-400 px-1">{hard}found by <span className="text-ink-200">{pct(r[0])}</span> of club players and <span className="text-ink-200">{pct(r[1])}</span> of strong ones.</div>;
 }
 
 function StatusCard({ status, p, delta, failed, hint, mode, you }) {
