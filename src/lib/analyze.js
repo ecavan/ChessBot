@@ -6,12 +6,14 @@
  */
 import { Chess } from 'chess.js';
 import { engine } from '../engine/engine.js';
-import { replay, saveGame, getGame } from './games.js';
+import { replay, saveGame, getGame, timeClassOf } from './games.js';
 import { classifyGame, gameAccuracy, gameRating, counts } from './review.js';
 import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 import { addMistakePuzzles } from './puzzles.js';
+import { ccLevel } from './sync.js';
+import { ladder } from './ladder.js';
 import { maiaStyle } from '../engine/maiaClient.js';
 
 function terminalOf(fen) {
@@ -115,14 +117,19 @@ export async function styleRating(gameId) {
 /**
  * Both sides' game ratings for a reviewed game: { w, b } (null for a side with under 12 moves).
  * Worked out when shown, from the stored accuracies, so a change to the fit reaches old reviews.
+ * Each side is anchored on its own rating in that game; your side of a bot game on your rating
+ * against the bots (failing that, your chess.com rating).
  */
 export function gameRatings(game) {
   const s = game?.review?.summary;
   if (!s?.acc) return { w: null, b: null };
-  const plies = s.plies ?? game.uci?.length ?? 60;
+  const num = (x) => (Number.isFinite(Number(x)) && Number(x) > 0 ? Number(x) : null);
+  const elo = { w: num(game.whiteElo), b: num(game.blackElo) };
+  if (game.you && elo[game.you] == null) elo[game.you] = ladder()?.rating ?? ccLevel()?.rating ?? null;
+  const timeClass = timeClassOf(game);
   const skip = (c) => (s.rated ? s.rated[c] === false : s.est?.[c] === null);
-  const one = (c, o) => (skip(c) ? null : gameRating(s.acc[c], s.acc[o], plies));
-  return { w: one('w', 'b'), b: one('b', 'w') };
+  const one = (c) => (skip(c) ? null : gameRating(s.acc[c], { rating: elo[c], timeClass }));
+  return { w: one('w'), b: one('b') };
 }
 
 /** Which engine a review was made with: { flavor, full: bool, ms } (full = the complete network). */
@@ -165,7 +172,7 @@ export function summarize(game, review) {
 }
 
 /** Bumped when the classification, accuracy or game rating changes: older summaries are redone. */
-export const SUMMARY_V = 4;
+export const SUMMARY_V = 5;
 
 /** Redo the summaries of reviewed games from an older version (cheap: no engine needed). */
 export async function refreshSummaries() {

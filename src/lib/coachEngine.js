@@ -6,16 +6,17 @@
 import { Chess } from 'chess.js';
 import { engine } from '../engine/engine.js';
 import { explainMove, describeThreat, planIdeas, nullFen } from './coach.js';
-import { winPct, cpOf } from './review.js';
+import { clsWin as winPct, cpOf, CUTS } from './review.js';
 
 const search = (fen, ms, multipv = 1) => engine.search({ fen, movetime: ms, multipv, tag: 'coach', stops: ['eval'] });
 
-function classify(drop, isBest, wBest, secondGap) {
-  if (isBest) return secondGap >= 10 && wBest < 97 && wBest > 20 ? 'great' : 'best';
-  if (drop <= 2) return 'excellent';
-  if (drop <= 5) return 'good';
-  if (drop <= 10) return 'inaccuracy';
-  if (drop <= 20) return 'mistake';
+// the review's own cuts and scale (review.js), so a move is called the same thing live and afterwards
+function classify(drop, isBest) {
+  if (isBest) return 'best';
+  if (drop <= CUTS.excellent) return 'excellent';
+  if (drop <= CUTS.good) return 'good';
+  if (drop <= CUTS.inaccuracy) return 'inaccuracy';
+  if (drop <= CUTS.mistake) return 'mistake';
   return 'blunder';
 }
 

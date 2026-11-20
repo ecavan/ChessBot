@@ -177,14 +177,15 @@ function explain(c, move, fenBefore, bestSan, mover) {
   const pct = (x) => `${Math.round(x)}%`;
   switch (c.cls) {
     case 'brilliant': return `A brilliant sacrifice: ${move.san} gives up material, and it works.`;
-    case 'great': return c.wBest >= 99 ? `Finds the forced mate.` : `Punishes the opponent's mistake with the best move.`;
+    case 'great': return `The only move that punishes the opponent's mistake.`;
     case 'best': return `The engine's top choice.`;
     case 'excellent': return `Nearly as good as the best move (${bestSan}).`;
     case 'good': return `A decent move; ${bestSan} was a bit stronger.`;
     case 'book': return `A known opening move.`;
     case 'inaccuracy': return `${bestSan} was better. ${who}'s winning chances slip from ${pct(c.wBest)} to ${pct(c.wAfter)}.`;
     case 'mistake': return `${bestSan} was much better. ${who}'s winning chances drop from ${pct(c.wBest)} to ${pct(c.wAfter)}.`;
-    case 'miss': return `A missed mate: ${bestSan} forced checkmate. Winning chances after ${move.san}: ${pct(c.wAfter)}.`;
+    case 'miss': return c.mateIn > 0 ? `A missed mate: ${bestSan} forced checkmate. Winning chances after ${move.san}: ${pct(c.wAfter)}.`
+      : `A missed chance: the last move was a mistake and ${bestSan} punished it. ${who}'s winning chances go from ${pct(c.wBest)} to ${pct(c.wAfter)}.`;
     case 'blunder': return `A blunder. ${bestSan} kept ${pct(c.wBest)} winning chances; after ${move.san} it's ${pct(c.wAfter)}.`;
     default: return '';
   }
@@ -515,7 +516,7 @@ function Summary({ game, sum, phases }) {
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
         <div className="text-lg font-semibold text-ink-100 num">{est.w ?? '–'}</div>
-        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How strong the moves in this game were, as a chess.com rating. It rates the play, not the player: nobody's rating goes into it. One game is a rough guide; Insights averages your last ten.">Game rating</div>
+        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="The way chess.com gives it: the player's own rating, moved up or down by the accuracy. About par at 64 accuracy, several hundred above for a clean game. The opponent does not come into it.">Game rating</div>
         <div className="text-lg font-semibold text-ink-100 num">{est.b ?? '–'}</div>
       </div>
       <div className="mt-3 space-y-0.5">

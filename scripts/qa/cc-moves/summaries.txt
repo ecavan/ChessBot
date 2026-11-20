@@ -1,0 +1,24 @@
+daily/1053899222 Players Accuracy 85.6 73.1 Skills +3 Brilliant 0 0 Great 1 0 Book 2 1 Best 14 12 Excellent 12 12 Good 1 2 Inaccuracy 1 0 Mistake 0 6 Miss 4 0 Blunder 0 1 Game Rating 1550 200
+daily/1047673272 Players Accuracy 64.6 66.9 Skills Brilliant 0 0 Great 0 1 Book 0 0 Best 14 14 Excellent 14 16 Good 6 4 Inaccuracy 1 4 Mistake 6 4 Miss 2 3 Blunder 3 0 Game Rating 150 750
+daily/1045823420 Players Accuracy 67.2 75.1 Brilliant 0 0 Great 0 1 Book 2 2 Best 12 15 Excellent 14 17 Good 5 2 Inaccuracy 6 4 Mistake 3 2 Miss 2 2 Blunder 2 1 Game Rating 200 1250
+daily/1045740492 Players Accuracy 57.9 68.1 Brilliant 0 0 Great 0 2 Book 3 2 Best 3 9 Excellent 2 3 Good 2 0 Inaccuracy 5 4 Mistake 5 3 Miss 0 0 Blunder 1 1 Game Rating 400 750
+daily/1044097798 Players Accuracy 50.9 40.6 Brilliant 0 0 Great 2 0 Book 3 2 Best 14 7 Excellent 8 10 Good 3 5 Inaccuracy 1 1 Mistake 3 7 Miss 5 3 Blunder 5 8 Game Rating 250 150
+daily/1040410386 Players Accuracy 63.3 83.7 Brilliant 0 0 Great 0 1 Book 0 0 Best 5 11 Excellent 10 7 Good 2 4 Inaccuracy 3 0 Mistake 4 0 Miss 0 1 Blunder 1 1 Game Rating 200 1550
+daily/1037270980 Players Accuracy 69.7 85.9 Brilliant 0 0 Great 0 1 Book 1 1 Best 3 6 Excellent 6 4 Good 0 2 Inaccuracy 1 0 Mistake 3 0 Miss 0 2 Blunder 1 0 Game Rating 200 1550
+daily/1036271670 Players Accuracy 83.2 46.0 Brilliant 0 0 Great 1 0 Book 0 0 Best 5 1 Excellent 5 2 Good 0 3 Inaccuracy 0 1 Mistake 0 3 Miss 1 0 Blunder 0 1 Game Rating 1500 200
+live/186075450872 Players Accuracy 62.9 52.3 Brilliant 0 0 Great 1 0 Book 3 3 Best 7 5 Excellent 1 3 Good 2 1 Inaccuracy 2 1 Mistake 0 1 Miss 3 1 Blunder 0 3 Game Rating 350 100
+live/185341519222 Players Accuracy 47.0 56.8 Brilliant 0 0 Great 0 2 Book 2 1 Best 4 5 Excellent 0 0 Good 2 1 Inaccuracy 3 3 Mistake 1 2 Miss 1 1 Blunder 3 0 Game Rating 100 150
+live/185191475442 Players Accuracy 71.5 53.1 Brilliant 0 0 Great 2 0 Book 4 4 Best 4 4 Excellent 0 0 Good 1 0 Inaccuracy 1 1 Mistake 2 2 Miss 0 0 Blunder 0 2 Game Rating 750 100
+live/185187446654 Players Accuracy 72.2 64.6 Brilliant 0 0 Great 1 0 Book 4 4 Best 7 4 Excellent 4 4 Good 1 3 Inaccuracy 4 2 Mistake 2 2 Miss 0 1 Blunder 0 1 Game Rating 750 150
+live/186959986002 Players Accuracy 81.8 56.8 Skills Brilliant 0 0 Great 1 0 Book 3 1 Best 5 3 Excellent 5 4 Good 1 3 Inaccuracy 0 2 Mistake 1 3 Miss 2 0 Blunder 0 1 Game Rating 950 100
+live/186193159586 Players Accuracy 70.4 89.0 Skills Brilliant 0 0 Great 1 2 Book 3 2 Best 5 13 Excellent 5 3 Good 1 2 Inaccuracy 2 2 Mistake 6 0 Miss 0 0 Blunder 0 0 Game Rating 400 1050
+live/185450102586 Players Accuracy 58.0 64.3 Skills Brilliant 0 0 Great 1 2 Book 1 1 Best 6 7 Excellent 4 5 Good 4 3 Inaccuracy 0 2 Mistake 4 2 Miss 2 1 Blunder 0 1 Game Rating 100 400
+live/186313979786 Players Accuracy 93.0 87.3 Brilliant 0 0 Great 2 0 Book 3 2 Best 20 24 Excellent 29 26 Good 4 2 Inaccuracy 1 0 Mistake 1 4 Miss 0 1 Blunder 0 1 Game Rating 1050 800
+live/186313502352 Players Accuracy 73.7 71.5 Skills Brilliant 0 0 Great 2 2 Book 6 5 Best 14 11 Excellent 9 12 Good 1 2 Inaccuracy 2 1 Mistake 3 2 Miss 1 2 Blunder 2 2 Game Rating 800 750
+live/185285628370 Players Accuracy 31.4 36.7 Brilliant 1 0 Great 0 2 Book 3 3 Best 3 2 Excellent 3 2 Good 0 0 Inaccuracy 0 0 Mistake 1 2 Miss 4 4 Blunder 3 2 Game Rating 100 100
+live/186358540676 Players Accuracy 81.6 78.3 Brilliant 0 0 Great 3 1 Book 4 4 Best 19 12 Excellent 9 13 Good 4 5 Inaccuracy 1 2 Mistake 2 3 Miss 0 1 Blunder 1 1 Game Rating 950 500
+live/185141087424 Players Accuracy 64.8 75.9 Brilliant 0 1 Great 0 3 Book 2 2 Best 8 7 Excellent 5 5 Good 4 5 Inaccuracy 3 2 Mistake 1 2 Miss 2 1 Blunder 2 0 Game Rating 250 850
+live/185288606340 Players Accuracy 60.8 53.6 Brilliant 0 0 Great 1 0 Book 2 2 Best 6 5 Excellent 4 6 Good 1 0 Inaccuracy 3 2 Mistake 5 0 Miss 0 4 Blunder 2 1 Game Rating 150 100
+live/185265303016 Players Accuracy 85.9 74.3 Brilliant 1 0 Great 1 0 Book 5 4 Best 9 7 Excellent 4 6 Good 3 2 Inaccuracy 1 1 Mistake 1 3 Miss 0 1 Blunder 0 0 Game Rating 1000 800
+live/187582715418 Players Accuracy 66.6 77.3 Skills Brilliant 0 0 Great 1 2 Book 5 5 Best 9 11 Excellent 5 8 Good 2 1 Inaccuracy 3 1 Mistake 5 0 Miss 0 4 Blunder 2 0 Game Rating 400 900
+live/184985294020 Players Accuracy 44.9 49.4 Brilliant 0 0 Great 3 2 Book 3 2 Best 9 12 Excellent 7 2 Good 2 7 Inaccuracy 0 1 Mistake 6 3 Miss 5 2 Blunder 3 6 Game Rating 100 100

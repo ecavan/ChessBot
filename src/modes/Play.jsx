@@ -212,8 +212,12 @@ function PlayGame() {
     finished.current = c.id;
     const { moves: mv } = replay({ startFen: c.startFen, uci: c.uci });
     const b = botById(c.botId);
+    // your rating going into the game (your rating against the bots; the bot's own for a first game):
+    // the game rating in the review starts from it
+    const mine = ladder()?.rating ?? (b.max ? null : b.elo);
+    const botShown = b.max ? undefined : b.elo;
     recordPlayed({ id: c.id, source: 'bot', you: c.you, white: c.you === 'w' ? 'You' : b.name, black: c.you === 'b' ? 'You' : b.name,
-      whiteElo: c.you === 'b' && !b.max ? b.elo : undefined, blackElo: c.you === 'w' && !b.max ? b.elo : undefined,
+      whiteElo: c.you === 'b' ? botShown : mine ?? undefined, blackElo: c.you === 'w' ? botShown : mine ?? undefined,
       startFen: c.startFen, moves: mv, result, how });
     // your rating against the bots: rated unless you had help
     const score = result === '1/2-1/2' ? 0.5 : (result === '1-0') === (c.you === 'w') ? 1 : 0;

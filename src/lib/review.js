@@ -9,22 +9,46 @@
  *   Best        the engine's top move (or as good)
  *   Excellent   loses ≤ 2%      Good ≤ 5%      Inaccuracy ≤ 10%
  *   Mistake     ≤ 20%           Blunder > 20%
- *   Great       the best move when it punishes the opponent's mistake (his last move cost him
- *               ≥ 15%), or starts a forced mate he allowed
+ *   Best        the engine's first choice, and only that
+ *   Great       the first choice when it is the only good move (the second-best gives up 8 points
+ *               or more) and it punishes the opponent's error
  *   Brilliant   a sound sacrifice (best or within 3%), in a position that isn't already won: the
  *               engine's line after it takes material and you don't simply take it back
- *   Miss        you had a forced mate and played a move that lets it go
+ *   Miss        the opponent had just gone wrong and you let it go with a mistake of your own; or
+ *               you had a forced mate and played a move that lets it go
  *   Book        a known opening position (and nothing better was missed)
- *   Great, Brilliant and Miss are set to match chess.com's labels on Eli's reviewed games
- *   (scripts/qa/cc-relabel.mjs).
+ *   The cuts, the eval scale and the Best / Great / Miss rules were set against chess.com's own
+ *   Game Review, move by move, on 13 games (scripts/qa/cc-moves/): 64% of moves get the same label,
+ *   93% land in the same band (fine / inaccuracy / mistake-or-worse). Most of the rest is Best
+ *   against Excellent, where the two engines simply prefer different first moves.
  *
  * Accuracy (moveAccuracy, gameAccuracy below) is fitted to chess.com's numbers.
  */
 import { Chess } from 'chess.js';
 import { VALUE } from './chessutil.js';
-import GAME_RATING from '../data/gameRating.json' with { type: 'json' };
 
 export const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+
+/**
+ * Winning chances the way chess.com's Game Review grades moves, from a Stockfish 17 evaluation.
+ *
+ * Two things were measured on 13 of chess.com's own reviews, move by move (scripts/qa/cc-moves/):
+ * its evaluations run larger than Stockfish 17's once a side is clearly better (+2.7 here reads
+ * about +4.5 there, +4.5 about +8.2, and it stops near +12), and its labels follow the win chance
+ * lost under 100 / (1 + e^(−0.003 × its centipawns)) with cuts near 3, 6, 10 and 22 points
+ * (CUTS below). CC_SCALE is that eval-to-eval table; clsWin composes the two.
+ */
+const CC_SCALE = [[0, 0], [25, 20], [70, 70], [120, 137], [170, 217], [230, 333], [270, 451], [340, 669], [445, 818], [525, 891], [720, 991], [855, 1115], [1010, 1180], [2000, 1300]];
+export function ccEval(cp) {
+  const x = Math.abs(cp);
+  let i = 0;
+  while (i < CC_SCALE.length - 2 && CC_SCALE[i + 1][0] <= x) i++;
+  const [x0, y0] = CC_SCALE[i], [x1, y1] = CC_SCALE[i + 1];
+  return Math.sign(cp) * Math.min(1300, y0 + ((x - x0) / (x1 - x0)) * (y1 - y0));
+}
+export const clsWin = (cp) => 100 / (1 + Math.exp(-0.003 * ccEval(cp)));
+/** Win chance lost, in points: at most this much is Excellent, Good, an Inaccuracy, a Mistake; more is a Blunder. */
+export const CUTS = { excellent: 3, good: 6, inaccuracy: 10, mistake: 22 };
 
 /** Engine line → centipawns from White's side (mates as ±10000 minus distance). */
 export function cpOf(line) {
@@ -40,7 +64,8 @@ export function cpOf(line) {
  * the fit. A flatter curve is what chess.com's rating-aware model looks like at club level: a pawn
  * up is a smaller edge when either side can still blunder it back.
  */
-const ACC = { k: 0.00195, a: 0.07688, p: 1.32769, q: 0.32082 };
+// refitted on 220 player-games across ratings 100-2100 (scripts/qa/fit-accuracy.py): mean error 3.4 points, no lean
+const ACC = { k: 0.0026, a: 0.04691, p: 1.55307, q: 0.41275 };
 const accWin = (cp) => 100 / (1 + Math.exp(-ACC.k * Math.max(-2000, Math.min(2000, cp))));
 /** Accuracy of one move (0–100) from the evaluation with the best move and after the move played. */
 export const moveAccuracy = (bestCp, afterCp) => 100 * Math.exp(-ACC.a * Math.max(0, accWin(bestCp) - accWin(afterCp)) ** ACC.p);
@@ -104,7 +129,7 @@ export function isSacrifice(before, move, pv) {
  */
 export function classifyGame(positions, moves, isBook = () => false) {
   const out = [];
-  let prevDrop = 0;
+  let prevDrop = 0, prevBase = 50;
   for (let i = 0; i < moves.length; i++) {
     const before = positions[i], after = positions[i + 1];
     const white = moves[i].color === 'w';
@@ -119,15 +144,17 @@ export function classifyGame(positions, moves, isBook = () => false) {
     else if (before.lines[0]?.pv?.[0] === playedUci) { afterCp = bestCp; source = 'pv1'; }
     else if (before.lines[1]?.pv?.[0] === playedUci) { afterCp = pov(cpOf(before.lines[1])); source = 'pv2'; }
     else { afterCp = pov(cpOf(after.lines[0])); source = 'next'; }
-    const wBest = winPct(bestCp), wAfter = winPct(afterCp);
+    const wBest = clsWin(bestCp), wAfter = clsWin(afterCp);
     const drop = Math.max(0, wBest - wAfter);
-    const isBest = source === 'pv1' || drop <= 0.5;
+    // Best is the engine's first choice and nothing else, as on chess.com: a move that scores the
+    // same but isn't it is Excellent
+    const isBest = before.lines[0]?.pv?.[0] === playedUci;
     let cls;
     if (isBest) cls = 'best';
-    else if (drop <= 2) cls = 'excellent';
-    else if (drop <= 5) cls = 'good';
-    else if (drop <= 10) cls = 'inaccuracy';
-    else if (drop <= 20) cls = 'mistake';
+    else if (drop <= CUTS.excellent) cls = 'excellent';
+    else if (drop <= CUTS.good) cls = 'good';
+    else if (drop <= CUTS.inaccuracy) cls = 'inaccuracy';
+    else if (drop <= CUTS.mistake) cls = 'mistake';
     else cls = 'blunder';
     // a forced mate let go: you had mate on the board and played something else
     const hadMate = pov(before.lines[0]?.mate ?? 0) > 0;
@@ -135,17 +162,21 @@ export function classifyGame(positions, moves, isBook = () => false) {
     if (hadMate && !keptMate && cls !== 'best') cls = 'miss';
     // a slower mate is still a mate: never a mistake or blunder
     if (hadMate && keptMate && (cls === 'mistake' || cls === 'blunder' || cls === 'inaccuracy')) cls = 'good';
-    // Great: punishing his mistake (his last move cost him 15% or more) or starting the forced mate
-    // he allowed, with the best move. The only legal move doesn't count.
-    if (drop <= 1 && (prevDrop >= 15 || (hadMate && keptMate && prevDrop >= 5))) {
-      let forced = false;
-      try { forced = new Chess(before.fen).moves().length <= 1; } catch { /* ignore */ }
-      if (!forced) cls = 'great';
+    // Miss, chess.com's way: he had just gone wrong (an inaccuracy's worth or more) and you let it
+    // go with a mistake of your own, without ending up clearly worse than before he erred. Ending
+    // up worse than that is your own Mistake or Blunder.
+    if ((cls === 'mistake' || cls === 'blunder') && prevDrop >= CUTS.inaccuracy && wAfter >= prevBase - 10) cls = 'miss';
+    // Great: the engine's first choice when it is the only good move (the second-best gives up 8
+    // points or more) and it punishes his error. The only legal move doesn't count.
+    if (cls === 'best' && prevDrop >= CUTS.inaccuracy && before.lines[1]?.pv?.length) {
+      const gap = wBest - clsWin(pov(cpOf(before.lines[1])));
+      if (gap >= 8) cls = 'great';
     }
     // a sound sacrifice, played when the game wasn't already won: the best move or close to it
     if (drop <= 3 && wBest < 90 && wAfter >= 45) { try { if (isSacrifice(before.fen, moves[i], after.lines?.[0]?.pv)) cls = 'brilliant'; } catch { /* ignore */ } }
     if (isBook(after.fen) && drop <= 5 && i < 30) cls = 'book';
     out.push({ cls, drop, acc: moveAccuracy(bestCp, afterCp), wBest, wAfter, cpBest: bestCp, cpAfter: afterCp, source, bestUci: before.lines[0]?.pv?.[0], bestLine: before.lines[0]?.pv || [], afterLine: after.lines[0]?.pv || [], mateIn: hadMate ? pov(before.lines[0].mate) : null });
+    prevBase = 100 - wBest; // the next mover's chances before this move: what a Miss is measured against
     prevDrop = drop;
   }
   return out;
@@ -165,47 +196,43 @@ export function gameAccuracy(classified, positions, color) {
 }
 
 /**
- * Game rating: how strong the play in one game was, from both sides' accuracy and the game's
- * length, as a chess.com rating. It rates the moves, not the player: it does not look at anyone's
- * rating, so the same game earns the same number whoever played it and whoever it was against.
- * Fitted on 17,000 chess.com rapid games where Game Review gave both accuracies
- * (scripts/qa/fit-rating.py), with every rating band weighted the same. One game is a rough guide
- * (±500 on average): `levelFrom` averages several.
+ * Game rating, the way chess.com's Game Review gives it: the player's own rating, moved by the
+ * accuracy. Measured on 48 player-games of chess.com's own reviews (scripts/qa/cc-moves/): for
+ * blitz games between ~290-rated players it gives 100-150 below 60 accuracy, the player's rating
+ * at about 64, +450 at 72, +650 at 85 and +770 at 93 (mean error against chess.com on those: 40
+ * points). Daily games are held to a higher standard, about 8 accuracy points (seven daily
+ * games: thinner evidence). It does not look at the opponent.
+ *
+ *   gameRating(acc, { rating, timeClass })
+ * `rating`: the player's rating in that game; for a bot game, your rating against the bots.
+ * Without one it assumes 300, the pool the curve was measured in.
  */
-export function gameRating(acc, accOpp, plies) {
+const GR_DELTA = [[40, -770], [45, -620], [50, -470], [55, -320], [60, -170], [62.5, -40], [65, 5], [67.5, 130], [70, 200], [72.5, 455], [75, 485], [80, 565], [85, 640], [90, 760], [100, 800]];
+export function gameRating(acc, { rating = null, timeClass = null } = {}) {
   if (acc == null) return null;
-  const G = GAME_RATING;
-  const pi = G.plies.reduce((b, p, i) => (Math.abs(p - plies) < Math.abs(G.plies[b] - plies) ? i : b), 0);
-  const grid = G.grid[pi];
-  const at = (axis, v) => {
-    const x = Math.max(axis[0], Math.min(axis[axis.length - 1], v));
-    let i = 0;
-    while (i < axis.length - 2 && axis[i + 1] <= x) i++;
-    return [i, (x - axis[i]) / (axis[i + 1] - axis[i])];
-  };
-  const [ai, af] = at(G.acc, acc);
-  const [oi, of] = at(G.opp, accOpp ?? acc);
-  const v = (1 - af) * ((1 - of) * grid[ai][oi] + of * grid[ai][oi + 1]) + af * ((1 - of) * grid[ai + 1][oi] + of * grid[ai + 1][oi + 1]);
-  return Math.round(v / 50) * 50;
+  const a = acc - (timeClass === 'daily' ? 8 : 0);
+  const T = GR_DELTA;
+  let d;
+  if (a <= T[0][0]) d = T[0][1];
+  else if (a >= T[T.length - 1][0]) d = T[T.length - 1][1];
+  else { let i = 0; while (T[i + 1][0] < a) i++; d = T[i][1] + ((a - T[i][0]) / (T[i + 1][0] - T[i][0])) * (T[i + 1][1] - T[i][1]); }
+  return Math.max(100, Math.round(((rating ?? 300) + d) / 50) * 50);
 }
-export const GAME_RATING_MAE = GAME_RATING.mae;
+/** A game rating against chess.com's own: off by about this much on average (blitz). */
+export const GAME_RATING_MAE = 150;
 
 /** Your level from recent game ratings: their average, rounded (null with fewer than 3). */
 export function levelFrom(ratings) {
   return levelStats(ratings)?.level ?? null;
 }
 
-/**
- * Your level with its uncertainty: { level, se, n }. One game's rating is off by MAE ≈ 490 on average
- * (a standard deviation of about 1.25 × MAE for roughly normal errors), so the mean of n games has a
- * standard error of about 1.25·MAE/√n: ±190 after 10 games, ±120 after 25. Null with fewer than 3.
- */
+/** Your level with a rough ±: the average of the game ratings and their spread over √n. Null with fewer than 3. */
 export function levelStats(ratings) {
   const r = ratings.filter(x => x != null);
   if (r.length < 3) return null;
   const mean = r.reduce((a, b) => a + b, 0) / r.length;
-  const sd = 1.25 * (GAME_RATING.mae || 490);
-  return { level: Math.round(mean / 50) * 50, se: Math.round(sd / Math.sqrt(r.length) / 10) * 10, n: r.length };
+  const sd = Math.sqrt(r.reduce((a, b) => a + (b - mean) ** 2, 0) / (r.length - 1));
+  return { level: Math.round(mean / 50) * 50, se: Math.max(20, Math.round(sd / Math.sqrt(r.length) / 10) * 10), n: r.length };
 }
 
 export function counts(classified, color, firstColor) {

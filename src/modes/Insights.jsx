@@ -148,7 +148,7 @@ export default function Insights() {
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Your level</div>
               <LevelChart values={levels.slice(-60)} band={lv?.se} />
-              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. A game rating says how strong the moves were, as a chess.com rating, whoever you were playing; one game swings a lot, ten settle down.</p>
+              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. A game rating is your rating in that game moved by your accuracy, the way chess.com's review gives it; one game swings a lot, ten settle down.</p>
             </section>
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Accuracy by game</div>

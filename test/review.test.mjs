@@ -3,7 +3,7 @@ import { Chess } from 'chess.js';
 // an in-memory localStorage so the stores work under node
 const mem = new Map();
 globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
-const { classifyGame, levelStats, winPct, gameRating } = await import('../src/lib/review.js');
+const { classifyGame, levelStats, winPct, clsWin, gameRating } = await import('../src/lib/review.js');
 const { clocksOf, timeSpent, importChessComGames, allGames, clearGames } = await import('../src/lib/games.js');
 const { addMistakePuzzles, dueMine, recordMine, progress } = await import('../src/lib/puzzles.js');
 
@@ -22,11 +22,11 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   // PV2 played: its own eval from the same search, not the next position's
   const g2 = new Chess(); const m2 = g2.move('d4');
   cls = classifyGame([{ fen: fen0, lines: [{ cp: 30, pv: ['e2e4'] }, { cp: 25, pv: ['d2d4'] }] }, { fen: g2.fen(), lines: [{ cp: -200, pv: ['d7d5'] }] }], [m2]);
-  check('pv2 → same-search eval (drop < 1)', cls[0].source === 'pv2' && cls[0].drop < 1 && cls[0].cls === 'best', cls[0]);
+  check('pv2 → same-search eval (drop < 1), Excellent: only the first choice is Best', cls[0].source === 'pv2' && cls[0].drop < 1 && cls[0].cls === 'excellent', cls[0]);
   // other move: next search, negated for Black's reply
   const g3 = new Chess(); const m3 = g3.move('f3');
   cls = classifyGame([{ fen: fen0, lines: [{ cp: 30, pv: ['e2e4'] }, { cp: 25, pv: ['d2d4'] }] }, { fen: g3.fen(), lines: [{ cp: -300, pv: ['e7e5'] }] }], [m3]);
-  check('other → next-search eval, blunder', cls[0].source === 'next' && cls[0].cls === 'blunder' && Math.abs(cls[0].drop - (winPct(30) - winPct(-300))) < 1e-9, cls[0]);
+  check('other → next-search eval, blunder', cls[0].source === 'next' && cls[0].cls === 'blunder' && Math.abs(cls[0].drop - (clsWin(30) - clsWin(-300))) < 1e-9, cls[0]);
 }
 // --- mate handling: losing a forced mate is a miss; a slower mate is never a blunder
 {
@@ -43,11 +43,17 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   cls = classifyGame([{ fen, lines: [{ mate: 1, pv: ['h5f7'] }, { cp: 500, pv: ['b1c3'] }] }, { fen: g3.fen(), lines: [{ mate: 5, pv: ['e8e7'] }] }], [m3]);
   check('slower mate is not a blunder', !['blunder', 'mistake', 'miss'].includes(cls[0].cls), cls[0].cls);
 }
-// --- game rating: the moves, not the player
+// --- game rating: the player's rating, moved by the accuracy (chess.com's way)
 {
-  check('more accurate rates higher', gameRating(85, 70, 60) > gameRating(60, 70, 60), [gameRating(85, 70, 60), gameRating(60, 70, 60)]);
-  check('no accuracy → null', gameRating(null, 70, 60) === null, null);
+  const at = (acc, rating, timeClass) => gameRating(acc, { rating, timeClass });
+  check('about par at 64 accuracy', Math.abs(at(64, 300) - 300) <= 50, at(64, 300));
+  check('a clean game: several hundred above', at(86, 300) >= 850 && at(86, 300) <= 1050, at(86, 300));
+  check('a poor game: on the floor', at(50, 300) === 100, at(50, 300));
+  check('moves with the player\'s rating', at(80, 1000) - at(80, 300) === 700, [at(80, 1000), at(80, 300)]);
+  check('daily is held to a higher standard', at(80, 1000, 'daily') < at(80, 1000, 'blitz'), null);
+  check('no accuracy → null', gameRating(null, { rating: 300 }) === null, null);
 }
+
 // --- your rating against the bots
 {
   const { expectedScore, kFactor, preview } = await import('../src/lib/ladder.js');
@@ -78,7 +84,7 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
 {
   const s = levelStats([600, 800, 1000, 700, 900, 650, 850, 750, 950, 800]);
   check('level mean rounded to 50', s.level === 800, s);
-  check('se ≈ 1.25·MAE/√10', s.se > 150 && s.se < 230, s.se);
+  check('± is the spread over √n', s.se >= 20 && s.se <= 60, s.se);
   check('too few games → null', levelStats([600, 800]) === null, levelStats([600, 800]));
 }
 // --- clocks from a chess.com-style PGN

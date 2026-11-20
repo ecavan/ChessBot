@@ -56,7 +56,7 @@ for (const g of games) {
   const c = new Chess();
   c.loadPgn(g.pgn);
   const moves = c.history({ verbose: true });
-  if (moves.length < 20) continue;
+  if (moves.length < 12) continue;
   const r = new Chess(moves[0].before);
   const fens = [r.fen()];
   for (const m of moves) { r.move(m.san); fens.push(r.fen()); }
@@ -73,7 +73,7 @@ for (const g of games) {
   const me = g.white.username.toLowerCase() === 'ecavan' ? 'w' : 'b';
   const row = {
     url: g.url, time_class: g.time_class, me, white: g.white.rating, black: g.black.rating, result: me === 'w' ? g.white.result : g.black.result,
-    cc: g.accuracies, ours: { white: acc.w, black: acc.b }, est: { white: gameRating(acc.w, acc.b, moves.length), black: gameRating(acc.b, acc.w, moves.length) },
+    cc: g.accuracies, ours: { white: acc.w, black: acc.b }, est: { white: gameRating(acc.w, { rating: g.white.rating, timeClass: g.time_class }), black: gameRating(acc.b, { rating: g.black.rating, timeClass: g.time_class }) },
     counts: { w: counts(cls, 'w', 'w'), b: counts(cls, 'b', 'w') },
     moves: cls.map((x, i) => ({ san: moves[i].san, cls: x.cls, drop: Math.round(x.drop * 10) / 10, best: x.bestUci })),
     plies: moves.length, secs: Math.round((Date.now() - t0) / 1000),
