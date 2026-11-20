@@ -514,7 +514,7 @@ function Summary({ game, sum }) {
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
         <div className="text-lg font-semibold text-ink-100 num">{est.w ?? '–'}</div>
-        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How well each side played this game, as a chess.com rating: it starts from the player's own rating and moves up or down with the accuracy.">Game rating</div>
+        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How strong the moves in this game were, as a chess.com rating. It rates the play, not the player: nobody's rating goes into it. One game is a rough guide; Insights averages your last ten.">Game rating</div>
         <div className="text-lg font-semibold text-ink-100 num">{est.b ?? '–'}</div>
       </div>
       <div className="mt-3 space-y-0.5">

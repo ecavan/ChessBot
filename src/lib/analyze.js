@@ -12,7 +12,6 @@ import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 import { addMistakePuzzles } from './puzzles.js';
-import { ccLevel } from './sync.js';
 import { maiaStyle } from '../engine/maiaClient.js';
 
 function terminalOf(fen) {
@@ -115,18 +114,14 @@ export async function styleRating(gameId) {
 
 /**
  * Both sides' game ratings for a reviewed game: { w, b } (null for a side with under 12 moves).
- * Anchored on each player's rating in that game; for your side of a game against a bot, on your
- * chess.com rating when the app knows it.
+ * Worked out when shown, from the stored accuracies, so a change to the fit reaches old reviews.
  */
 export function gameRatings(game) {
   const s = game?.review?.summary;
   if (!s?.acc) return { w: null, b: null };
   const plies = s.plies ?? game.uci?.length ?? 60;
-  const num = (x) => (Number.isFinite(Number(x)) && Number(x) > 0 ? Number(x) : null);
-  const elo = { w: num(game.whiteElo), b: num(game.blackElo) };
-  if (game.you && elo[game.you] == null) elo[game.you] = ccLevel()?.rating ?? null;
-  const one = (c, o) => (s.rated && s.rated[c] === false) || (s.est && s.est[c] === null && !s.rated) ? null
-    : gameRating({ acc: s.acc[c], accOpp: s.acc[o], plies, rating: elo[c], oppRating: elo[o] });
+  const skip = (c) => (s.rated ? s.rated[c] === false : s.est?.[c] === null);
+  const one = (c, o) => (skip(c) ? null : gameRating(s.acc[c], s.acc[o], plies));
   return { w: one('w', 'b'), b: one('b', 'w') };
 }
 

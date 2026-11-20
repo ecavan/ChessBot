@@ -63,7 +63,7 @@ export default function Home() {
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Puzzle rating</div><div className="v">{pr.ratings.rated}</div><div className="s">streak {pr.streak} · best {pr.best}</div></a>
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Visualize</div><div className="v">{pr.ratings.visual}</div><div className="s">{pr.plays.visual} played</div></a>
         <a href={dueM ? href('/puzzles/solve', { mode: 'mine' }) : dueP ? href('/puzzles/solve', { mode: 'review' }) : '#/puzzles'} className="stat hover:border-ink-500 transition"><div className="k">Mistakes to review</div><div className="v">{due}</div><div className="s">{dueM ? `${dueM} from your games` : `${pr.queue.length + mineCount()} in the queue`}</div></a>
-        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `played like ${level} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
+        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `level ${level} ± ${lv.se} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

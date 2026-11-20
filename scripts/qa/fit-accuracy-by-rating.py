@@ -1,5 +1,6 @@
-"""Game rating, anchored: the accuracy a player of rating r is expected to have (given the opponent's
-accuracy and the game's length), and how much one game's accuracy says about r. Writes gameRating.json."""
+"""The accuracy chess.com players of each rating average (and its spread, and how the opponent's
+accuracy and the game's length move it). Used to place the bots on chess.com ratings: docs/BOTS.md.
+   python3 fit-accuracy-by-rating.py accuracy-by-rating.json"""
 import json, sys, numpy as np, polars as pl
 from cc_load import load
 from sklearn.isotonic import IsotonicRegression

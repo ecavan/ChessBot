@@ -118,9 +118,7 @@ export default function Insights() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {cc
-              ? <Stat k="Your rating" v={`${cc.rating}`} s={`chess.com ${cc.cls}${level != null ? ` · your last ${recent.length} games played like ${level}` : ''}`} />
-              : <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `game ratings, last ${recent.length} full reviews${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />}
+            <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `game ratings, last ${recent.length} full reviews${cc ? ` · chess.com ${cc.cls} ${cc.rating}` : ''}${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />
             <Stat k="Accuracy" v={allAvg?.toFixed(1)} s={last10 != null ? `last 10: ${last10.toFixed(1)}` : null} />
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
             <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />
@@ -146,9 +144,9 @@ export default function Insights() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <section className="panel panel-pad min-w-0">
-              <div className="h-sec mb-3">Game rating, last ten</div>
+              <div className="h-sec mb-3">Your level</div>
               <LevelChart values={levels.slice(-60)} band={lv?.se} />
-              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. A game rating starts from your rating in that game and moves with your accuracy, so this line sits above your rating when you have been playing better than it, and below when worse.</p>
+              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. A game rating says how strong the moves were, as a chess.com rating, whoever you were playing; one game swings a lot, ten settle down.</p>
             </section>
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Accuracy by game</div>

@@ -43,7 +43,7 @@ the matches, against about 1450 from its lichess rating: the two agree to within
 
 A second check, from accuracy: `scripts/qa/bot-arena.mjs` reviews each setting's games with the
 app's own review. Maia at T 1 (three levels pooled) averages 71, which is what 850-rated players
-average on chess.com (`src/data/gameRating.json`); T 2.25 averages 60, which is what 250-rated
+average on chess.com (`scripts/qa/accuracy-by-rating.json`, from 29,700 crawled games); T 2.25 averages 60, which is what 250-rated
 players average. Both are within about 100 points of the table.
 
 Taken together the labels are good to about ±150: sound on order and spacing, and the whole scale

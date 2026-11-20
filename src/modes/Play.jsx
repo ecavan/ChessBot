@@ -6,8 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, PlayerStrip, EvalBar, MoveList, Toggle, Seg, Sheet, Spinner, fmtScore } from '../ui/kit.jsx';
-import { HUMAN_BOTS, ENGINE_BOTS, botById, botNear, botMove } from '../engine/bots.js';
-import { ccLevel } from '../lib/sync.js';
+import { HUMAN_BOTS, ENGINE_BOTS, botById, botMove } from '../engine/bots.js';
 import { engine } from '../engine/engine.js';
 import { useLiveEval } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
@@ -41,8 +40,7 @@ function ToWatch() { useEffect(() => { go('/watch'); }, []); return null; }
 
 function PlaySetup({ query }) {
   const [prefs, setPrefs] = usePrefs();
-  const mine = ccLevel(); // your chess.com rating, when the app has it: the rung to start from
-  const [botId, setBotId] = useState(() => botById(prefs.lastBot || (mine ? botNear(mine.rating).id : 'h400')).id);
+  const [botId, setBotId] = useState(() => botById(prefs.lastBot || 'h400').id);
   const [color, setColor] = useState(['w', 'b'].includes(query.color) ? query.color : prefs.lastColor || 'w');
   useEffect(() => { if (query.coach) setPrefs({ playCoach: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = load(CUR, null);
@@ -76,7 +74,7 @@ function PlaySetup({ query }) {
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
         <section className="panel panel-pad">
-          {[['Human-like opponents', HUMAN_BOTS, <>Each one plays the moves people of that rating really play, mistakes included, and loses the way they lose. The numbers are chess.com ratings{mine ? <>: you are <b className="text-ink-100">{mine.rating}</b> at {mine.cls}</> : null}.</>],
+          {[['Human-like opponents', HUMAN_BOTS, <>Each one plays the moves people of that rating really play, mistakes included, and loses the way they lose. The numbers are chess.com ratings.</>],
             ['Engine opponents', ENGINE_BOTS, <>Stockfish held back to a rating. Steadier than a person: fewer gifts, no bad days.</>]].map(([title, list, note], k) => (
             <div key={title} className={k ? 'mt-6' : ''}>
               <div className="h-sec mb-1.5">{title}</div>
@@ -89,7 +87,7 @@ function PlaySetup({ query }) {
                       <span className="text-2xl">{b.icon}</span>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white truncate">{b.name}</div>
-                        <div className={`text-xs font-bold num ${b.max ? 'text-emerald-300' : b.human ? 'text-sky-300' : 'text-amber-300'}`}>{b.max ? 'Max strength' : b.elo}{mine && !b.max && botNear(mine.rating).id === b.id ? <span className="ml-1.5 font-semibold text-emerald-300">your level</span> : null}</div>
+                        <div className={`text-xs font-bold num ${b.max ? 'text-emerald-300' : b.human ? 'text-sky-300' : 'text-amber-300'}`}>{b.max ? 'Max strength' : b.elo}</div>
                       </div>
                     </div>
                     <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
