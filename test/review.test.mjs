@@ -3,7 +3,7 @@ import { Chess } from 'chess.js';
 // an in-memory localStorage so the stores work under node
 const mem = new Map();
 globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
-const { classifyGame, levelStats, winPct } = await import('../src/lib/review.js');
+const { classifyGame, levelStats, winPct, gameRating, expectedAccuracy } = await import('../src/lib/review.js');
 const { clocksOf, timeSpent, importChessComGames, allGames, clearGames } = await import('../src/lib/games.js');
 const { addMistakePuzzles, dueMine, recordMine, progress } = await import('../src/lib/puzzles.js');
 
@@ -43,11 +43,25 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   cls = classifyGame([{ fen, lines: [{ mate: 1, pv: ['h5f7'] }, { cp: 500, pv: ['b1c3'] }] }, { fen: g3.fen(), lines: [{ mate: 5, pv: ['e8e7'] }] }], [m3]);
   check('slower mate is not a blunder', !['blunder', 'mistake', 'miss'].includes(cls[0].cls), cls[0].cls);
 }
+// --- game rating: anchored on the player's rating, moved by accuracy
+{
+  const par = (r) => gameRating({ acc: expectedAccuracy(r), accOpp: expectedAccuracy(r), plies: 60, rating: r, oppRating: r });
+  check('a par game rates the player\'s own rating (300)', par(300) === 300, par(300));
+  check('a par game rates the player\'s own rating (1000)', par(1000) === 1000, par(1000));
+  const up = gameRating({ acc: 85, accOpp: expectedAccuracy(300), plies: 60, rating: 300, oppRating: 300 });
+  const down = gameRating({ acc: 40, accOpp: expectedAccuracy(300), plies: 60, rating: 300, oppRating: 300 });
+  check('a clean game rates above, a poor one below', up > 300 && down < 300, { up, down });
+  check('one game moves it a few hundred points, not a thousand', up <= 900, up);
+  check('never under 100', down >= 100, down);
+  check('no accuracy → null', gameRating({ acc: null, rating: 300 }) === null, null);
+  const free = gameRating({ acc: 70, accOpp: 70, plies: 60 });
+  check('no anchor: a wide prior around 800', free >= 500 && free <= 1200, free);
+}
 // --- level with its uncertainty
 {
   const s = levelStats([600, 800, 1000, 700, 900, 650, 850, 750, 950, 800]);
   check('level mean rounded to 50', s.level === 800, s);
-  check('se ≈ 1.25·MAE/√10', s.se > 150 && s.se < 230, s.se);
+  check('± is the spread over √n', s.se >= 30 && s.se <= 50, s.se);
   check('too few games → null', levelStats([600, 800]) === null, levelStats([600, 800]));
 }
 // --- clocks from a chess.com-style PGN

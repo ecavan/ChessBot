@@ -9,13 +9,13 @@
  * Each device keeps its own username and sync state; there are no accounts and no server.
  *
  * State (chess.sync.v1): { user, lastEndTime (unix s), etags: { 'YYYY/MM': etag }, lastRun (ms),
- *   lastResult: { added, at, error? } }
+ *   lastResult: { added, at, error? }, ratings: { blitz: { rating, at (unix s) }, … } }
  * Settings that drive it live in prefs: chesscom (username), syncClasses (['rapid','blitz']),
  * syncAuto (bool), syncBackfillMonths (1).
  */
 import { load, save, KEYS } from './store.js';
 import { getPrefs } from './prefs.js';
-import { fetchChessComMonth, importChessComGames } from './games.js';
+import { fetchChessComMonth, importChessComGames, fetchChessComRatings } from './games.js';
 import { enqueue } from './reviewQueue.js';
 
 let state = load(KEYS.sync, { user: '', lastEndTime: 0, etags: {}, lastRun: 0, lastResult: null });
@@ -67,6 +67,8 @@ export async function sync({ manual = false, now = Date.now() } = {}) {
         if (r.etag) state.etags = { ...state.etags, [key]: r.etag };
       }
     } catch (e) { error = e.message || String(e); }
+    // your chess.com ratings: the anchor for game ratings and "your level"
+    try { const rt = await fetchChessComRatings(user); if (rt) state.ratings = rt; } catch { /* not vital */ }
     // keep only the current and previous month's ETags
     const keep = new Set(monthsToFetch(now, 2).map(([y, m]) => `${y}/${String(m).padStart(2, '0')}`));
     state.etags = Object.fromEntries(Object.entries(state.etags).filter(([k]) => keep.has(k)));
@@ -79,6 +81,18 @@ export async function sync({ manual = false, now = Date.now() } = {}) {
     return { added, skipped, ...(error ? { error } : {}) };
   })();
   return inflight;
+}
+
+/**
+ * Your chess.com ratings as last fetched: { blitz: { rating, at }, rapid: …, bullet: …, daily: … } or null.
+ * `ccLevel()` is the one to anchor on: the live time class (blitz, rapid, bullet) you played most recently.
+ */
+export const ccRatings = () => state.ratings || null;
+export function ccLevel() {
+  const r = state.ratings;
+  if (!r) return null;
+  const live = ['blitz', 'rapid', 'bullet'].filter(k => r[k]?.rating).sort((a, b) => (r[b].at || 0) - (r[a].at || 0));
+  return live.length ? { cls: live[0], rating: r[live[0]].rating } : null;
 }
 
 /** Forget the sync position (after a username change, or to refetch): the next sync starts from scratch. */

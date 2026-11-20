@@ -165,46 +165,66 @@ export function gameAccuracy(classified, positions, color) {
 }
 
 /**
- * Game rating: how strong the play in one game was, from both sides' accuracy and the game's
- * length, on chess.com's rapid scale. Fitted on 17,000 chess.com rapid games where Game Review
- * gave both accuracies (scripts/qa/fit-rating.py), with every rating band weighted the same: it
- * rates the moves, not the player, so it isn't pulled towards your own rating the way chess.com's
- * is. One game is a rough guide (±500 on average): `levelFrom` averages several.
+ * Game rating: how well one side played this game, as a chess.com rating. Like chess.com's, it
+ * starts from the player's own rating and moves with the accuracy: above what players of that
+ * rating usually score (given how accurately the opponent played and how long the game was) and
+ * the game rating is above the player's rating, below and it is below.
+ *
+ * It is the mean of a posterior over ratings: the prior is the player's rating (± G.prior), the
+ * evidence is the accuracy, with the expected accuracy and its spread at every rating fitted on
+ * chess.com blitz and rapid games with Game Review accuracies (scripts/qa/fit-game-rating.py; the
+ * two time classes follow the same curve). One game's accuracy says little about a rating (the
+ * spread is about ten points, the whole curve from 300 to 1500 is thirteen), so a game moves the
+ * number by a few hundred points at most.
+ *
+ *   gameRating({ acc, accOpp, plies, rating, oppRating })
+ * `rating` is the anchor: the player's rating in that game, or failing that the opponent's, or
+ * your chess.com rating for a game against a bot. With no anchor at all the prior is wide.
  */
-export function gameRating(acc, accOpp, plies) {
+const G = GAME_RATING;
+const interp = (xs, ys, x) => {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+  let i = 0;
+  while (xs[i + 1] < x) i++;
+  return ys[i] + ((x - xs[i]) / (xs[i + 1] - xs[i])) * (ys[i + 1] - ys[i]);
+};
+/** The accuracy players of this rating average (chess.com's Game Review accuracy). */
+export const expectedAccuracy = (rating) => interp(G.r, G.mean, rating);
+export function gameRating({ acc, accOpp = null, plies = 60, rating = null, oppRating = null } = {}) {
   if (acc == null) return null;
-  const G = GAME_RATING;
-  const pi = G.plies.reduce((b, p, i) => (Math.abs(p - plies) < Math.abs(G.plies[b] - plies) ? i : b), 0);
-  const grid = G.grid[pi];
-  const at = (axis, v) => {
-    const x = Math.max(axis[0], Math.min(axis[axis.length - 1], v));
-    let i = 0;
-    while (i < axis.length - 2 && axis[i + 1] <= x) i++;
-    return [i, (x - axis[i]) / (axis[i + 1] - axis[i])];
+  const anchor = rating ?? oppRating;
+  const r0 = anchor ?? 800, s0 = anchor != null ? G.prior : 900;
+  const shift = G.b0 + (accOpp != null ? G.bOpp * (accOpp - expectedAccuracy(oppRating ?? r0)) : 0) + G.bLen * Math.log(Math.max(20, Math.min(200, plies)) / 60);
+  // posterior mean rating for an accuracy `a`
+  const pm = (a) => {
+    let sw = 0, sr = 0;
+    for (let r = 100; r <= 3000; r += 25) {
+      const sd = interp(G.r, G.sd, r);
+      const z = (a - (expectedAccuracy(r) + shift)) / sd, p = (r - r0) / s0;
+      const w = Math.exp(-0.5 * z * z - 0.5 * p * p) / sd;
+      sw += w; sr += w * r;
+    }
+    return sr / sw;
   };
-  const [ai, af] = at(G.acc, acc);
-  const [oi, of] = at(G.opp, accOpp ?? acc);
-  const v = (1 - af) * ((1 - of) * grid[ai][oi] + of * grid[ai][oi + 1]) + af * ((1 - of) * grid[ai + 1][oi] + of * grid[ai + 1][oi + 1]);
-  return Math.round(v / 50) * 50;
+  // measured from the accuracy expected at the anchor, so a par game rates exactly the player's rating
+  // (the rating scale stops at 100, which would otherwise pull low ratings up)
+  const v = r0 + pm(acc) - pm(expectedAccuracy(r0) + shift);
+  return Math.max(100, Math.round(v / 50) * 50);
 }
-export const GAME_RATING_MAE = GAME_RATING.mae;
 
 /** Your level from recent game ratings: their average, rounded (null with fewer than 3). */
 export function levelFrom(ratings) {
   return levelStats(ratings)?.level ?? null;
 }
 
-/**
- * Your level with its uncertainty: { level, se, n }. One game's rating is off by MAE ≈ 490 on average
- * (a standard deviation of about 1.25 × MAE for roughly normal errors), so the mean of n games has a
- * standard error of about 1.25·MAE/√n: ±190 after 10 games, ±120 after 25. Null with fewer than 3.
- */
+/** The average of recent game ratings with a rough ± (their spread over √n): { level, se, n }. Null with fewer than 3. */
 export function levelStats(ratings) {
   const r = ratings.filter(x => x != null);
   if (r.length < 3) return null;
   const mean = r.reduce((a, b) => a + b, 0) / r.length;
-  const sd = 1.25 * (GAME_RATING.mae || 490);
-  return { level: Math.round(mean / 50) * 50, se: Math.round(sd / Math.sqrt(r.length) / 10) * 10, n: r.length };
+  const sd = Math.sqrt(r.reduce((a, b) => a + (b - mean) ** 2, 0) / (r.length - 1));
+  return { level: Math.round(mean / 50) * 50, se: Math.max(10, Math.round(sd / Math.sqrt(r.length) / 10) * 10), n: r.length };
 }
 
 export function counts(classified, color, firstColor) {

@@ -5,10 +5,10 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { Chess } from 'chess.js';
-import { classifyGame, gameAccuracy, gameRating, counts, cpOf } from '../../src/lib/review.js';
+import { classifyGame, gameAccuracy, counts, cpOf } from '../../src/lib/review.js';
 import { posKey } from '../../src/lib/chessutil.js';
 import { decode, Maia, fensFromUci } from '../../src/engine/maia.js';
-import { BOTS, MAIA_BOTS } from '../../src/engine/bots.js';
+import { BOTS } from '../../src/engine/bots.js';
 
 const [outPath, nArg = '8', ...humanFiles] = process.argv.slice(2);
 const N = Number(nArg), SF = process.env.SF || 'stockfish', NODES = Number(process.env.NODES || 150000);
@@ -73,7 +73,7 @@ async function review(sans) {
   const acc = { w: gameAccuracy(cls, positions, 'w'), b: gameAccuracy(cls, positions, 'b') };
   const c = { w: counts(cls, 'w', 'w'), b: counts(cls, 'b', 'w') };
   // hung material: moves that lose a piece outright to the reply (drop in win% > 20 = blunder)
-  return { plies: sans.length, acc, est: { w: gameRating(acc.w, acc.b, sans.length), b: gameRating(acc.b, acc.w, sans.length) }, counts: c };
+  return { plies: sans.length, acc, counts: c };
 }
 const out = existsSync(outPath) ? JSON.parse(readFileSync(outPath)) : {};
 const save = () => writeFileSync(outPath, JSON.stringify(out));
@@ -86,11 +86,7 @@ for (const f of humanFiles) for (const g of JSON.parse(readFileSync(f)).games) {
   out.humans.push({ url: g.url, me, r: { w: g.white.rating, b: g.black.rating }, cc: g.accuracies || null, ...r }); save();
   console.log('human', out.humans.length, sans.length, r.acc, g.accuracies || '');
 }
-const VARIANTS = [
-  ...BOTS.filter(b => b.elo <= 1400), ...MAIA_BOTS.filter(b => b.maia <= 1500),
-  { id: 'maia1100-t1.5', maia: 1100, temp: 1.5 }, { id: 'maia1100-t2', maia: 1100, temp: 2 }, { id: 'maia1100-t3', maia: 1100, temp: 3 },
-  { id: 'w200', weak: { depth: 1, temp: 400, random: 0.5 } }, { id: 'w300', weak: { depth: 1, temp: 320, random: 0.4 } },
-];
+const VARIANTS = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : [...BOTS.filter(b => !b.max && (b.maia || b.elo <= 1600))];
 for (const bot of VARIANTS) {
   out[bot.id] ||= [];
   while (out[bot.id].length < N) {

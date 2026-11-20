@@ -45,12 +45,12 @@ export default function HumanMove({ fens, lines, played = null, lesson = null })
   let text;
   if (human.uci === best) {
     text = pBest >= 0.3
-      ? <>Strong players find this one: <b className="text-ink-100">{pct(pBest)}</b> of 1900s play {san(best)} here.</>
-      : <>Even strong players rarely see it: only <b className="text-ink-100">{pct(pBest)}</b> of 1900s play {san(best)}; the rest spread over {r.slice(1, 3).map(x => `${x.san} (${pct(x.p)})`).join(', ')}.</>;
+      ? <>Strong players find this one: <b className="text-ink-100">{pct(pBest)}</b> of strong club players play {san(best)} here.</>
+      : <>Even strong players rarely see it: only <b className="text-ink-100">{pct(pBest)}</b> of strong club players play {san(best)}; the rest spread over {r.slice(1, 3).map(x => `${x.san} (${pct(x.p)})`).join(', ')}.</>;
   } else if (cost != null && cost <= 10) {
-    text = <>The practical move: <b className="text-emerald-200">{human.san}</b>, what <b className="text-ink-100">{pct(human.p)}</b> of 1900s play{cost <= 2 ? ', and just as good' : `, worth about ${Math.round(cost)}% less`}. The engine's {san(best)} is found by {pct(pBest)} of them.</>;
+    text = <>The practical move: <b className="text-emerald-200">{human.san}</b>, what <b className="text-ink-100">{pct(human.p)}</b> of strong club players play{cost <= 2 ? ', and just as good' : `, worth about ${Math.round(cost)}% less`}. The engine's {san(best)} is found by {pct(pBest)} of them.</>;
   } else {
-    text = <>Most 1900s play <b className="text-ink-100">{human.san}</b> here ({pct(human.p)}); the engine's {san(best)} is found by {pct(pBest)} of them.</>;
+    text = <>Most strong club players play <b className="text-ink-100">{human.san}</b> here ({pct(human.p)}); the engine's {san(best)} is found by {pct(pBest)} of them.</>;
   }
   const mine = played && played !== best && played !== human.uci ? r.find(x => x.uci === played) : null;
   // where players stop making this move: the first level at which fewer than 1 in 12 play it
@@ -59,15 +59,15 @@ export default function HumanMove({ fens, lines, played = null, lesson = null })
     const first = levels.findIndex(p => p < 0.08);
     const peak = Math.max(...levels);
     if (peak < 0.08) grow = 'Rare at every level: a slip, not a habit.';
-    else if (first < 0) grow = `Even 1900s play this ${pct(levels[levels.length - 1])} of the time: a hard spot, not a habit.`;
-    else if (first === 0) grow = `Uncommon even at 1100 (${pct(levels[0])}).`;
-    else grow = `A move players grow out of: ${pct(levels[0])} of 1100s play it, ${pct(levels[first])} of ${MAIA_LEVELS[first]}s.`;
+    else if (first < 0) grow = `Even strong club players play this ${pct(levels[levels.length - 1])} of the time: a hard spot, not a habit.`;
+    else if (first === 0) grow = `Uncommon even among beginners (${pct(levels[0])}).`;
+    else grow = `A move players grow out of: ${pct(levels[0])} of beginners play it, ${pct(levels[first])} of ${first >= 3 ? 'strong club players' : 'club players'}.`;
   }
   const les = lesson ? lessonById(lesson) : null;
   return (
     <div className="text-xs text-ink-300 mt-1.5 space-y-1">
       <p><span className="text-sky-300 font-semibold">Human move</span> {text}{mine ? <> Your {san(played)}: {pct(mine.p)} of them.</> : null}</p>
-      {grow && <p><span className="text-amber-300 font-semibold">Your level</span> {grow}{les ? <> The lesson for it: <a className="underline" href={`#/train/basics/${les.id}`}>{les.title}</a>.</> : null}</p>}
+      {grow && <p><span className="text-amber-300 font-semibold">Habit or slip</span> {grow}{les ? <> The lesson for it: <a className="underline" href={`#/train/basics/${les.id}`}>{les.title}</a>.</> : null}</p>}
     </div>
   );
 }

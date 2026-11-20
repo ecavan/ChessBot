@@ -92,17 +92,17 @@ export function useStage({ evalBar = false, panel = 380 } = {}) {
 }
 
 /** The board screen layout: [eval bar] board (with strips above and below) | panel. */
-export function Stage({ stage, top, bottom, evalBar, board, children, panelClass = '' }) {
+export function Stage({ stage, top, bottom, evalBar, board, children, panelClass = '', hideBoard = false }) {
   return (
     <div className={`stage ${stage.portrait ? 'portrait' : ''}`} style={{ '--bw': `${stage.size + (evalBar ? 30 : 0)}px` }}>
-      <div className="stage-board">
+      {!hideBoard && <div className="stage-board">
         {top && <div style={{ marginLeft: evalBar ? 30 : 0 }}>{top}</div>}
         <div className="flex gap-2 items-stretch">
           {evalBar}
           {board}
         </div>
         {bottom && <div style={{ marginLeft: evalBar ? 30 : 0 }}>{bottom}</div>}
-      </div>
+      </div>}
       <div className={`stage-panel ${stage.portrait ? '' : 'fill'} ${panelClass}`} style={stage.portrait ? {} : { width: stage.panel, height: stage.size + 80 }}>
         {children}
       </div>

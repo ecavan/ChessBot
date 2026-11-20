@@ -4,7 +4,8 @@
  */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { allGames, subscribeGames, resultFor, timeSpent } from '../lib/games.js';
-import { classified } from '../lib/analyze.js';
+import { classified, gameRatings } from '../lib/analyze.js';
+import { ccLevel } from '../lib/sync.js';
 import { phaseOf, levelFrom, levelStats, CLASSES } from '../lib/review.js';
 import QueueCard from './QueueCard.jsx';
 import { href } from '../lib/router.js';
@@ -73,15 +74,14 @@ export default function Insights() {
       const acc = g.review.summary.acc[g.you];
       if (acc != null) trend.push(acc);
       // a lite-network review is too rough to rate a game by
-      ratings.push(g.review.flavor?.startsWith('full') ? (g.review.summary.est?.[g.you] ?? null) : null);
-      if (g.review.style?.[g.you]?.est != null) styles.push(g.review.style[g.you].est);
+      ratings.push(g.review.flavor?.startsWith('full') ? gameRatings(g)[g.you] : null);
       const res = resultFor(g, g.you);
       if (res !== 'unfinished') byColor[g.you][res]++;
       const fam = family(g.review.summary.opening?.name);
       const o = (openings[fam + '|' + g.you] ||= { name: fam, color: g.you, n: 0, pts: 0, acc: 0 });
       o.n++; o.pts += res === 'win' ? 1 : res === 'draw' ? 0.5 : 0; o.acc += acc || 0;
     }
-    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, ratings, styles, moments, totals, blunders, mistakes, moves, byColor, n: chrono.length, lite, clock };
+    return { phase, openings: Object.values(openings).sort((a, b) => b.n - a.n), trend, ratings, moments, totals, blunders, mistakes, moves, byColor, n: chrono.length, lite, clock };
   }, [reviewed, ready]);
 
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
@@ -90,9 +90,7 @@ export default function Insights() {
   const recent = stats ? stats.ratings.filter(x => x != null).slice(-10) : [];
   const lv = levelStats(recent);
   const level = lv?.level ?? null;
-  const styleRecent = stats ? stats.styles.slice(-10) : [];
-  const styleN = styleRecent.length;
-  const styleAvg = styleN ? Math.round(avg(styleRecent) / 10) * 10 : null;
+  const cc = ccLevel(); // your real chess.com rating, when the app has it
   // your level after each game: the average game rating of that game and the nine before it
   const levels = stats ? stats.ratings.map((_, i) => levelFrom(stats.ratings.slice(Math.max(0, i - 9), i + 1))).filter(x => x != null) : [];
   // brilliant moves first, then great ones, newest first within each
@@ -119,9 +117,10 @@ export default function Insights() {
         <div className="panel panel-pad text-center muted">{ready ? 'Review a few of your games to see insights here.' : <Spinner />}</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `last ${recent.length} full reviews${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />
-            <Stat k="Plays like" v={styleAvg != null ? `${styleAvg}` : '–'} s={styleAvg != null ? `Maia, lichess scale · whose moves yours look like · last ${styleN}` : 'from your next reviews'} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {cc
+              ? <Stat k="Your rating" v={`${cc.rating}`} s={`chess.com ${cc.cls}${level != null ? ` · your last ${recent.length} games played like ${level}` : ''}`} />
+              : <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `game ratings, last ${recent.length} full reviews${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />}
             <Stat k="Accuracy" v={allAvg?.toFixed(1)} s={last10 != null ? `last 10: ${last10.toFixed(1)}` : null} />
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
             <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />
@@ -147,9 +146,9 @@ export default function Insights() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <section className="panel panel-pad min-w-0">
-              <div className="h-sec mb-3">Your level</div>
+              <div className="h-sec mb-3">Game rating, last ten</div>
               <LevelChart values={levels.slice(-60)} band={lv?.se} />
-              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game, with its ± band: one game is only good to about ±500, so a swing inside the band is noise. Play better for ten games and it shows.</p>
+              <p className="text-xs text-ink-400 mt-2">The average game rating of your last ten games, after each game. A game rating starts from your rating in that game and moves with your accuracy, so this line sits above your rating when you have been playing better than it, and below when worse.</p>
             </section>
             <section className="panel panel-pad min-w-0">
               <div className="h-sec mb-3">Accuracy by game</div>

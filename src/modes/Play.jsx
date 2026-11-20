@@ -6,7 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, PlayerStrip, EvalBar, MoveList, Toggle, Seg, Sheet, Spinner, fmtScore } from '../ui/kit.jsx';
-import { BOTS, MAIA_BOTS, botById, botMove } from '../engine/bots.js';
+import { HUMAN_BOTS, ENGINE_BOTS, botById, botNear, botMove } from '../engine/bots.js';
+import { ccLevel } from '../lib/sync.js';
 import { engine } from '../engine/engine.js';
 import { useLiveEval } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
@@ -40,7 +41,8 @@ function ToWatch() { useEffect(() => { go('/watch'); }, []); return null; }
 
 function PlaySetup({ query }) {
   const [prefs, setPrefs] = usePrefs();
-  const [botId, setBotId] = useState(prefs.lastBot || 'b1400');
+  const mine = ccLevel(); // your chess.com rating, when the app has it: the rung to start from
+  const [botId, setBotId] = useState(() => botById(prefs.lastBot || (mine ? botNear(mine.rating).id : 'h400')).id);
   const [color, setColor] = useState(['w', 'b'].includes(query.color) ? query.color : prefs.lastColor || 'w');
   useEffect(() => { if (query.coach) setPrefs({ playCoach: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = load(CUR, null);
@@ -74,39 +76,28 @@ function PlaySetup({ query }) {
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
         <section className="panel panel-pad">
-          <div className="h-sec mb-3">Human-like opponents</div>
-          <p className="text-sm text-ink-300 mb-3">Maia is a network trained on millions of real games to play the move a person of that rating plays, natural mistakes included. The 1500 here loses the way the 1500s you meet online lose, so what you learn to punish at home shows up in your games.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 mb-6">
-            {MAIA_BOTS.map(b => (
-              <button key={b.id} onClick={() => setBotId(b.id)}
-                className={`text-left rounded-2xl border px-3.5 py-3 transition ${botId === b.id ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_0_3px_rgba(16,185,129,.18)]' : 'border-ink-700 bg-ink-850 hover:border-ink-500'}`}>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">{b.icon}</span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{b.name}</div>
-                    <div className="text-xs font-bold num text-sky-300">human-like</div>
-                  </div>
-                </div>
-                <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
-              </button>
-            ))}
-          </div>
-          <div className="h-sec mb-3">Engine opponents</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-            {BOTS.map(b => (
-              <button key={b.id} onClick={() => setBotId(b.id)}
-                className={`text-left rounded-2xl border px-3.5 py-3 transition ${botId === b.id ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_0_3px_rgba(16,185,129,.18)]' : 'border-ink-700 bg-ink-850 hover:border-ink-500'}`}>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">{b.icon}</span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{b.name}</div>
-                    <div className={`text-xs font-bold num ${b.max ? 'text-emerald-300' : 'text-amber-300'}`}>{b.max ? 'Max strength' : b.elo}</div>
-                  </div>
-                </div>
-                <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
-              </button>
-            ))}
-          </div>
+          {[['Human-like opponents', HUMAN_BOTS, <>Each one plays the moves people of that rating really play, mistakes included, and loses the way they lose. The numbers are chess.com ratings{mine ? <>: you are <b className="text-ink-100">{mine.rating}</b> at {mine.cls}</> : null}.</>],
+            ['Engine opponents', ENGINE_BOTS, <>Stockfish held back to a rating. Steadier than a person: fewer gifts, no bad days.</>]].map(([title, list, note], k) => (
+            <div key={title} className={k ? 'mt-6' : ''}>
+              <div className="h-sec mb-1.5">{title}</div>
+              <p className="text-sm text-ink-300 mb-3">{note}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                {list.map(b => (
+                  <button key={b.id} onClick={() => setBotId(b.id)}
+                    className={`text-left rounded-2xl border px-3.5 py-3 transition ${botId === b.id ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_0_3px_rgba(16,185,129,.18)]' : 'border-ink-700 bg-ink-850 hover:border-ink-500'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">{b.icon}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white truncate">{b.name}</div>
+                        <div className={`text-xs font-bold num ${b.max ? 'text-emerald-300' : b.human ? 'text-sky-300' : 'text-amber-300'}`}>{b.max ? 'Max strength' : b.elo}{mine && !b.max && botNear(mine.rating).id === b.id ? <span className="ml-1.5 font-semibold text-emerald-300">your level</span> : null}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-ink-300 mt-2 leading-snug">{b.blurb}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
 
         <aside className="panel panel-pad space-y-4 lg:sticky lg:top-20">
@@ -126,8 +117,7 @@ function PlaySetup({ query }) {
             {inProgress && !fromFen ? 'New game' : 'Start game'}
           </button>
           <p className="text-xs text-ink-400 leading-relaxed">
-            Ratings 1400+ use Stockfish's own strength limit (calibrated at rapid). Lower bots search shallow and pick
-            among a few moves, so they miss tactics like real beginners.
+            The ratings are measured: the bots played each other, and their games were reviewed next to real chess.com games at each rating.
           </p>
         </aside>
       </div>

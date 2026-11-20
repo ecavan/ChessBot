@@ -12,6 +12,7 @@ import { kindsOf } from './plan.js';
 import { allGames } from './games.js';
 import { loadBook, isBook, openingOf } from './book.js';
 import { addMistakePuzzles } from './puzzles.js';
+import { ccLevel } from './sync.js';
 import { maiaStyle } from '../engine/maiaClient.js';
 
 function terminalOf(fen) {
@@ -78,7 +79,6 @@ export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = 
   saveGame(game);
   // your mistakes become puzzles for the "Your mistakes" queue (full-network reviews only: lite ones are rough)
   if (game.you && flavor?.startsWith('full')) { try { addMistakePuzzles(game, classified(game)); } catch { /* not vital */ } }
-  styleRating(gameId).catch(() => {});
   return game;
 }
 
@@ -113,6 +113,23 @@ export async function styleRating(gameId) {
   return style;
 }
 
+/**
+ * Both sides' game ratings for a reviewed game: { w, b } (null for a side with under 12 moves).
+ * Anchored on each player's rating in that game; for your side of a game against a bot, on your
+ * chess.com rating when the app knows it.
+ */
+export function gameRatings(game) {
+  const s = game?.review?.summary;
+  if (!s?.acc) return { w: null, b: null };
+  const plies = s.plies ?? game.uci?.length ?? 60;
+  const num = (x) => (Number.isFinite(Number(x)) && Number(x) > 0 ? Number(x) : null);
+  const elo = { w: num(game.whiteElo), b: num(game.blackElo) };
+  if (game.you && elo[game.you] == null) elo[game.you] = ccLevel()?.rating ?? null;
+  const one = (c, o) => (s.rated && s.rated[c] === false) || (s.est && s.est[c] === null && !s.rated) ? null
+    : gameRating({ acc: s.acc[c], accOpp: s.acc[o], plies, rating: elo[c], oppRating: elo[o] });
+  return { w: one('w', 'b'), b: one('b', 'w') };
+}
+
 /** Which engine a review was made with: { flavor, full: bool, ms } (full = the complete network). */
 export function reviewEngine(game) {
   const r = game?.review;
@@ -139,7 +156,9 @@ export function summarize(game, review) {
   return {
     acc,
     // a rating guess needs enough moves to mean anything
-    est: { w: movesBy(cls, first, 'w') >= 12 ? gameRating(acc.w, acc.b, moves.length) : null, b: movesBy(cls, first, 'b') >= 12 ? gameRating(acc.b, acc.w, moves.length) : null },
+    // (the game rating itself is worked out when shown, from the accuracies: see gameRatings)
+    rated: { w: movesBy(cls, first, 'w') >= 12, b: movesBy(cls, first, 'b') >= 12 },
+    plies: moves.length,
     counts: { w: counts(cls, 'w', first), b: counts(cls, 'b', first) },
     opening: openingOf(fens),
     // your mistakes by kind (lesson id), for the weekly plan

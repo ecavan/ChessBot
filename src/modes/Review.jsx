@@ -8,7 +8,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, EvalGraph, ClsDot, Progress, Spinner, Seg, Sheet, Stat, fmtScore } from '../ui/kit.jsx';
 import { allGames, subscribeGames, getGame, deleteGame, importPgnText, fetchChessCom, fetchLichess, gamePgn, replay, resultFor } from '../lib/games.js';
-import { analyzeGame, classified, styleRating } from '../lib/analyze.js';
+import { analyzeGame, classified, gameRatings } from '../lib/analyze.js';
 import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
@@ -23,6 +23,7 @@ import { NavButtons } from './Play.jsx';
 import Insights from './Insights.jsx';
 import QueueCard from './QueueCard.jsx';
 import HumanMove from '../ui/HumanMove.jsx';
+import { voice } from '../lib/voice.js';
 import { mistakeKind } from '../lib/plan.js';
 import { promote, pause, enqueue, useQueue } from '../lib/reviewQueue.js';
 import { reviewEngine } from '../lib/analyze.js';
@@ -296,10 +297,6 @@ function GameReview({ id, auto, startPly = null }) {
   const wins = full ? fens.map((_, i) => winPct(cpOf(posLine(i)))) : [];
   const marks = cls ? cls.cls.map((c, i) => ({ ply: i + 1, cls: c.cls })).filter(m => ['blunder', 'mistake', 'miss', 'brilliant', 'great'].includes(m.cls)) : [];
   const c = cur > 0 && cls ? cls.cls[cur - 1] : null;
-  // reviews from before the style rating existed: compute it once, in the Maia worker
-  useEffect(() => {
-    if (game?.review?.summary && !game.review.style && !game.review.partial) styleRating(game.id).catch(() => {});
-  }, [game?.id, !!game?.review?.summary, !!game?.review?.style]); // eslint-disable-line react-hooks/exhaustive-deps
   const mv = cur > 0 ? moves[cur - 1] : null;
   const bestSan = c && c.bestUci ? uciToSan(fens[cur - 1], c.bestUci) : null;
   const bad = c && ['inaccuracy', 'mistake', 'blunder', 'miss'].includes(c.cls);
@@ -342,8 +339,10 @@ function GameReview({ id, auto, startPly = null }) {
   const wb = walk ? walkBoard(walk, walkI) : null;
   const retryArrows = retry?.showBest ? [{ from: cls.cls[retryIdx].bestUci.slice(0, 2), to: cls.cls[retryIdx].bestUci.slice(2, 4), color: 'rgba(16,185,129,.85)' }] : [];
 
+  // Portrait: a reviewed game opens on the report alone (no board), the way chess.com's does.
+  const reportOnly = stage.portrait && full && !!sum && cur === 0 && !retry && !walk && !prog;
   return (
-    <Stage stage={stage}
+    <Stage stage={stage} hideBoard={reportOnly}
       top={<Strip game={game} color={orientation === 'white' ? 'b' : 'w'} sum={sum} />}
       bottom={<Strip game={game} color={orientation === 'white' ? 'w' : 'b'} sum={sum} />}
       evalBar={<EvalBar height={stage.size} orientation={orientation} line={engineOn && live.lines[0] ? live.lines[0] : posLine(retry ? retryIdx : cur)} />}
@@ -355,7 +354,7 @@ function GameReview({ id, auto, startPly = null }) {
           badge={!retry && c && mv ? { sq: mv.to, cls: c.cls } : null} />)
       }
     >
-      {stage.portrait && !retry && !walk && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
+      {stage.portrait && !retry && !walk && !reportOnly && <NavButtons ply={cur} len={len} jump={jump} extra={<button className="ibtn" onClick={() => setFlip(f => !f)} aria-label="Flip">⇅</button>} />}
       {walk ? <WalkPanel walk={walk} i={walkI} setI={setWalkI} onClose={() => setWalk(null)} /> : prog ? (
         <div className="panel panel-pad space-y-2">
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Stockfish is reviewing the game</span><span className="num text-ink-300">{prog.done}/{prog.total}</span></div>
@@ -421,11 +420,19 @@ function GameReview({ id, auto, startPly = null }) {
               {(() => {
                 const ex = explainMove(fens[cur - 1], uciOf(mv), { cls: c.cls, drop: c.drop, bestUci: c.bestUci, bestLine: c.bestLine, afterLine: c.afterLine, ply: cur - 1, prevUci: cur >= 2 ? uciOf(moves[cur - 2]) : null, prevCaptured: cur >= 2 ? !!moves[cur - 2].captured : null, mateIn: c.mateIn, wAfter: c.wAfter });
                 const pts = ex.points.length ? ex.points : [explain(c, mv, fens[cur - 1], bestSan, moverOf(cur - 1))];
-                return pts.map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
+                // the coach writes to "you": for the other side's moves (or a game that isn't yours) it names the side
+                const mover = moverOf(cur - 1);
+                const said = game.you && mover === game.you ? pts : pts.map(t => voice(t, mover));
+                return said.slice(0, 2).map((t, i) => <p key={i} className="text-sm text-ink-200 mt-1.5">{t}</p>);
               })()}
-              {bad && c.bestLine?.length > 0 && <p className="text-xs text-ink-300 mt-1.5"><span className="text-emerald-300 font-semibold">Best line</span> {lineSan(fens[cur - 1], c.bestLine, 8)}</p>}
-              {bad && prefs.humanMove !== false && <HumanMove fens={fens.slice(0, cur)} lines={game.review.positions[cur - 1]?.lines} played={uciOf(mv)} lesson={cls && moverOf(cur - 1) === game.you ? mistakeKind(cls, cur - 1) : null} />}
-              {bad && c.afterLine?.length > 0 && <p className="text-xs text-ink-300 mt-1"><span className="text-rose-300 font-semibold">After {mv.san}</span> {lineSan(fens[cur], c.afterLine, 6)}</p>}
+              {bad && (c.bestLine?.length > 0 || c.afterLine?.length > 0) && (
+                <details className="mt-2 text-xs text-ink-300">
+                  <summary className="cursor-pointer select-none text-ink-400 py-1">The lines, and what people play here</summary>
+                  {c.bestLine?.length > 0 && <p className="mt-1"><span className="text-emerald-300 font-semibold">Best line</span> {lineSan(fens[cur - 1], c.bestLine, 8)}</p>}
+                  {c.afterLine?.length > 0 && <p className="mt-1"><span className="text-rose-300 font-semibold">After {mv.san}</span> {lineSan(fens[cur], c.afterLine, 6)}</p>}
+                  {prefs.humanMove !== false && <HumanMove fens={fens.slice(0, cur)} lines={game.review.positions[cur - 1]?.lines} played={uciOf(mv)} lesson={cls && moverOf(cur - 1) === game.you ? mistakeKind(cls, cur - 1) : null} />}
+                </details>
+              )}
               <div className="flex flex-wrap gap-2 mt-3">
                 {bad && c.bestLine?.length > 0 && <button className="btn btn-sm btn-primary" onClick={() => startWalk({ title: `The better move: ${bestSan}`, fen: fens[cur - 1], pv: c.bestLine, you: moverOf(cur - 1), score: game.review.positions[cur - 1]?.lines?.[0], prevUci: cur > 1 ? uciOf(moves[cur - 2]) : null })}>Show best line, step by step</button>}
                 {bad && c.afterLine?.length > 0 && <button className="btn btn-sm" onClick={() => startWalk({ title: `Why ${mv.san} goes wrong`, fen: fens[cur], pv: c.afterLine, you: moverOf(cur - 1), score: game.review.positions[cur]?.lines?.[0], prevUci: uciOf(mv) })}>Why {mv.san} goes wrong</button>}
@@ -496,6 +503,7 @@ function Strip({ game, color, sum }) {
 function Summary({ game, sum }) {
   const rows = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
   const eng = reviewEngine(game);
+  const est = gameRatings(game);
   return (
     <div className="panel panel-pad relative">
       {eng && <span className={`absolute top-2 right-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${eng.full ? 'text-ink-400 bg-ink-800/60' : 'text-amber-200 bg-amber-900/40'}`} title={eng.full ? `Full network, ${eng.ms} ms per position` : 'Reviewed with the lite network: the numbers are rough. Re-analyze once the full engine has loaded.'}>{eng.full ? `full · ${eng.ms ? `${(eng.ms / 1000).toFixed(1)} s` : ''}` : 'lite · rough'}</span>}
@@ -505,17 +513,10 @@ function Summary({ game, sum }) {
         <div><div className="text-[11px] uppercase tracking-wider text-ink-300 truncate">{game.black}</div><div className="text-3xl font-semibold text-white num">{sum.acc.b?.toFixed(1) ?? '–'}</div></div>
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
-        <div className="text-sm text-ink-200 num">{sum.est.w ?? '–'}</div>
-        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How strong the moves in this game were, on chess.com's rapid scale. One game is a rough guide; Insights averages your last ten for your level.">Game rating</div>
-        <div className="text-sm text-ink-200 num">{sum.est.b ?? '–'}</div>
+        <div className="text-lg font-semibold text-ink-100 num">{est.w ?? '–'}</div>
+        <div className="text-[11px] uppercase tracking-wider text-ink-400" title="How well each side played this game, as a chess.com rating: it starts from the player's own rating and moves up or down with the accuracy.">Game rating</div>
+        <div className="text-lg font-semibold text-ink-100 num">{est.b ?? '–'}</div>
       </div>
-      {game.review.style && (game.review.style.w || game.review.style.b) && (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center mt-1">
-          <div className="text-sm text-sky-200 num">{game.review.style.w?.est ?? '–'}</div>
-          <div className="text-[11px] uppercase tracking-wider text-ink-400" title="Rating from style (Maia, on the lichess scale): the rating level whose players most often make the moves this side made, book moves aside. A different measure from the game rating: not how good the moves were, but whose moves they look like.">Played like</div>
-          <div className="text-sm text-sky-200 num">{game.review.style.b?.est ?? '–'}</div>
-        </div>
-      )}
       <div className="mt-3 space-y-0.5">
         {rows.map(k => (sum.counts.w[k] || sum.counts.b[k]) ? (
           <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-sm">
@@ -534,14 +535,14 @@ function Summary({ game, sum }) {
 function SummaryBar({ game, sum, onOpen }) {
   const side = (c) => (
     <span className="min-w-0 flex items-baseline gap-1.5">
-      <span className="truncate text-ink-300">{c === 'w' ? game.white : game.black}</span>
-      <b className="num text-white">{sum.acc[c]?.toFixed(1) ?? '–'}</b>
-      {sum.est?.[c] ? <span className="num text-xs text-ink-400">{sum.est[c]}</span> : null}
+      <span className="truncate text-ink-300">{game.you === c ? 'You' : c === 'w' ? game.white : game.black}</span>
+      <b className="num text-white shrink-0">{sum.acc[c]?.toFixed(1) ?? '–'}</b>
     </span>
   );
+  const first = game.you === 'b' ? 'b' : 'w';
   return (
     <button className="panel px-3.5 py-2.5 flex items-center gap-3 text-sm text-left w-full hover:border-ink-500 transition" onClick={onOpen} aria-label="Back to the game report">
-      {side('w')}<span className="text-ink-500">·</span>{side('b')}
+      {side(first)}<span className="text-ink-500">·</span>{side(first === 'w' ? 'b' : 'w')}
       <span className="ml-auto shrink-0 text-xs font-semibold text-ink-300">Report ▸</span>
     </button>
   );

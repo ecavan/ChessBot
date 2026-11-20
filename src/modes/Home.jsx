@@ -13,6 +13,7 @@ import QueueCard from './QueueCard.jsx';
 import { lessonDone } from './Lessons.jsx';
 import { LESSONS } from '../data/lessons.js';
 import { levelStats } from '../lib/review.js';
+import { gameRatings } from '../lib/analyze.js';
 
 export default function Home() {
   const games = useSyncExternalStore(subscribeGames, allGames);
@@ -33,7 +34,7 @@ export default function Home() {
   const mine = games.filter(g => g.you && g.review?.summary);
   const accs = mine.slice(0, 10).map(g => g.review.summary.acc[g.you]).filter(x => x != null);
   // the level only counts full-network reviews: lite ones are rough
-  const lv = levelStats(mine.filter(g => g.review.flavor?.startsWith('full')).slice(0, 10).map(g => g.review.summary.est?.[g.you] ?? null));
+  const lv = levelStats(mine.filter(g => g.review.flavor?.startsWith('full')).slice(0, 10).map(g => gameRatings(g)[g.you]));
   const level = lv?.level ?? null;
   const avgAcc = accs.length ? accs.reduce((a, b) => a + b, 0) / accs.length : null;
   const bot = cur ? botById(cur.botId) : null;
@@ -43,8 +44,8 @@ export default function Home() {
       <div className="grid md:grid-cols-2 gap-4">
         <a href={inGame ? '#/play/game' : '#/play'} className="card-link !p-6 !border-emerald-700/50 bg-gradient-to-br from-emerald-950/50 to-ink-900">
           <div className="h-sec !text-emerald-300">{inGame ? 'Game in progress' : 'Play'}</div>
-          <div className="text-2xl font-semibold text-white mt-2">{inGame ? `vs ${bot.name}` : 'Play Stockfish'}</div>
-          <div className="text-sm text-ink-300 mt-1">{inGame ? `${bot.max ? 'Max strength' : bot.elo} · move ${Math.ceil(cur.uci.length / 2)}` : 'Thirteen opponents from 400 to full-strength Stockfish 17.1.'}</div>
+          <div className="text-2xl font-semibold text-white mt-2">{inGame ? `vs ${bot.name}` : 'Play a bot'}</div>
+          <div className="text-sm text-ink-300 mt-1">{inGame ? `${bot.max ? 'Max strength' : bot.elo} · move ${Math.ceil(cur.uci.length / 2)}` : 'Human-like opponents from 200 up, on chess.com ratings, then Stockfish to full strength.'}</div>
           <span className="btn btn-primary mt-4">{inGame ? 'Continue' : 'New game'}</span>
         </a>
         <a href={href('/puzzles/solve', { mode: 'daily' })} className="card-link !p-6">
@@ -62,7 +63,7 @@ export default function Home() {
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Puzzle rating</div><div className="v">{pr.ratings.rated}</div><div className="s">streak {pr.streak} · best {pr.best}</div></a>
         <a href="#/puzzles" className="stat hover:border-ink-500 transition"><div className="k">Visualize</div><div className="v">{pr.ratings.visual}</div><div className="s">{pr.plays.visual} played</div></a>
         <a href={dueM ? href('/puzzles/solve', { mode: 'mine' }) : dueP ? href('/puzzles/solve', { mode: 'review' }) : '#/puzzles'} className="stat hover:border-ink-500 transition"><div className="k">Mistakes to review</div><div className="v">{due}</div><div className="s">{dueM ? `${dueM} from your games` : `${pr.queue.length + mineCount()} in the queue`}</div></a>
-        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `level ${level} ± ${lv.se} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
+        <a href="#/review/insights" className="stat hover:border-ink-500 transition"><div className="k">Game accuracy</div><div className="v">{avgAcc != null ? avgAcc.toFixed(1) : '–'}</div><div className="s">{level != null ? `played like ${level} · last ${accs.length}` : accs.length ? `last ${accs.length} reviewed` : 'review a game'}</div></a>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -171,6 +171,30 @@ export async function fetchChessCom(user, months = 1) {
   return importPgnText(text, 'chesscom', [user]);
 }
 
+/** A player's current chess.com ratings by time class: { blitz: { rating, at }, … } (public stats, no login). */
+export async function fetchChessComRatings(user) {
+  const r = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user.trim().toLowerCase())}/stats`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const out = {};
+  for (const k of TIME_CLASSES) { const x = d[`chess_${k}`]?.last; if (x?.rating) out[k] = { rating: x.rating, at: x.date || 0 }; }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * The time class of a game from its PGN TimeControl, by chess.com's rule (base + 40 × increment:
+ * under 3 minutes bullet, under 10 blitz, else rapid; "1/86400" is daily). Null when unknown.
+ */
+export function timeClassOf(game) {
+  const tc = game?.timeControl || '';
+  if (!tc || tc === '-') return null;
+  if (tc.includes('/')) return 'daily';
+  const [base, inc = 0] = tc.split('+').map(Number);
+  if (!Number.isFinite(base)) return null;
+  const t = base + 40 * inc;
+  return t < 180 ? 'bullet' : t < 600 ? 'blitz' : 'rapid';
+}
+
 /** chess.com time-control classes, from the API's time_class field. */
 export const TIME_CLASSES = ['rapid', 'blitz', 'bullet', 'daily'];
 

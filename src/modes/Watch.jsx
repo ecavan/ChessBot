@@ -28,6 +28,7 @@ import { moveSound, sfx } from '../lib/sound.js';
 import { load, save } from '../lib/store.js';
 import { href } from '../lib/router.js';
 import { gameOverOf, useNav, NavButtons } from './Play.jsx';
+import { voice } from '../lib/voice.js';
 
 const KEY = 'chess.watch.v1';
 // delay: the least time a move takes on screen; ms: how long each position is analysed
@@ -36,28 +37,6 @@ const BAD = ['inaccuracy', 'mistake', 'blunder', 'miss'];
 const BIG = ['mistake', 'blunder', 'miss'];
 const SIDE = { w: 'White', b: 'Black' };
 const other = (c) => (c === 'w' ? 'b' : 'w');
-
-/** The coach talks to "you"; here it talks about a side. */
-export function voice(text, me) {
-  if (!text) return text;
-  const M = SIDE[me], O = SIDE[other(me)];
-  const t = text
-    .replace(/^Your move: (.)/, (_, c) => c.toUpperCase())
-    .replace(/\bYou missed\b/g, `${M} missed`)
-    .replace(/\bYou had\b/g, `${M} had`)
-    .replace(/\bYou lose\b/g, `${M} loses`)
-    .replace(/\byou are (up|down)\b/gi, `${M} is $1`)
-    .replace(/\bYou are (ahead|behind)\b/g, `${M} is $1`)
-    .replace(/\bbefore you attack\b/g, `before ${M} attacks`)
-    .replace(/\bThey threaten\b/g, `${O} threatens`)
-    .replace(/\bThey want\b/g, `${O} wants`)
-    .replace(/\byour opponent\b/g, O)
-    .replace(/\b[Yy]our\b/g, `${M}'s`)
-    .replace(/\b[Tt]heir\b/g, `${O}'s`)
-    .replace(/\bYou\b/g, M)
-    .replace(/\byou\b/g, M);
-  return t;
-}
 
 function terminalOf(fen) {
   const g = new Chess(fen);
@@ -74,8 +53,8 @@ const moveLabel = (fen, san) => { const [, t, , , , n] = fen.split(' '); return 
 
 export default function Watch() {
   const saved = useMemo(() => load(KEY, null), []);
-  const [white, setWhite] = useState(saved?.white || 'b1400');
-  const [black, setBlack] = useState(saved?.black || 'b1800');
+  const [white, setWhite] = useState(() => botById(saved?.white || 'h600').id);
+  const [black, setBlack] = useState(() => botById(saved?.black || 'h1000').id);
   const [pace, setPace] = useState(saved?.pace && PACES[saved.pace] ? saved.pace : 'normal');
   const [pauseOnBad, setPauseOnBad] = useState(saved?.pauseOnBad ?? false);
   const [uci, setUci] = useState(saved?.uci || []);
@@ -259,13 +238,13 @@ export default function Watch() {
             <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
               <label className="text-xs text-ink-300">White
                 <select className="w-full mt-1" value={white} onChange={(e) => setWhite(e.target.value)}>
-                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : b.maia ? '(human-like)' : `(${b.elo})`}</option>)}
+                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : `(${b.elo}${b.human ? ', human-like' : ''})`}</option>)}
                 </select>
               </label>
               <button className="ibtn mb-0.5" aria-label="Swap colours" onClick={() => { setWhite(black); setBlack(white); }}>⇄</button>
               <label className="text-xs text-ink-300">Black
                 <select className="w-full mt-1" value={black} onChange={(e) => setBlack(e.target.value)}>
-                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : b.maia ? '(human-like)' : `(${b.elo})`}</option>)}
+                  {ALL_BOTS.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name} {b.max ? '(max)' : `(${b.elo}${b.human ? ', human-like' : ''})`}</option>)}
                 </select>
               </label>
             </div>
