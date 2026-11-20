@@ -61,3 +61,12 @@ refitted on all: same label 54.2% → 60.6% on the held-out games.
 ## To re-run
 
 See `scripts/qa/cc-moves/README.md`.
+
+## Depth
+
+The first pass is timed (Settings, 0.4 to 8 s a position; 0.8 s reaches about depth 17 on a desktop).
+After it, the review queue goes back over your 40 most recent games and searches every position to
+a fixed depth (`reviewDeep`, default 21; each position capped at 20 s). The existing report stays
+up until the deeper one is complete; progress is kept in `review.deep`, so it resumes after the app
+is closed. It only runs while the app is visible: iOS suspends a web app when it is closed or the
+screen locks. The report tag shows the depth reached ("full · depth 21").

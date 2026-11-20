@@ -11,6 +11,7 @@ export const DEFAULT_PREFS = {
   peek: true, // tapping a piece that can't move shows where it could go
   engine: 'full', // 'full' | 'lite'
   analysisTime: 800, // ms per position in game review
+  reviewDeep: 21, // after the first pass, deepen each of your games to this depth in the background (0: off)
   playEval: false,
   playThreats: false,
   playGuard: true, // the blunder check: the one assist that trains the habit, so on by default

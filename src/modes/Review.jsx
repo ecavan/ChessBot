@@ -8,7 +8,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, EvalGraph, ClsDot, Progress, Spinner, Seg, Sheet, Stat, fmtScore } from '../ui/kit.jsx';
 import { allGames, subscribeGames, getGame, deleteGame, importPgnText, fetchChessCom, fetchLichess, gamePgn, replay, resultFor } from '../lib/games.js';
-import { analyzeGame, classified, gameRatings, REVIEW_STEPS } from '../lib/analyze.js';
+import { analyzeGame, classified, gameRatings, reviewDepth, needsDeepening } from '../lib/analyze.js';
 import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf, phaseAccuracy, PHASES } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
@@ -223,6 +223,7 @@ function GameReview({ id, auto, startPly = null }) {
   const q = useQueue();
   const queued = q.progress?.id === id ? q.progress : null;
   const [ply, setPly] = useState(Number.isFinite(startPly) ? startPly : null);
+  const [deepTo, setDeepTo] = useState(0); // the depth a hand-started deepening is going to (0: an ordinary review)
   const [flip, setFlip] = useState(false);
   const [prog, setProg] = useState(null); // { done, total }
   const [engineOn, setEngineOn] = useState(false);
@@ -251,11 +252,14 @@ function GameReview({ id, auto, startPly = null }) {
   const cls = useMemo(() => (full && bookOk ? classified(game) : full ? classified(game) : null), [game, full, bookOk]);
   const phases = useMemo(() => { try { return cls ? phaseAccuracy(cls.cls ?? cls, cls.fens ?? replay(game).fens) : null; } catch { return null; } }, [cls, game]);
 
-  async function analyze(ms = prefs.analysisTime) {
+  // analyze(): a fresh review at the Settings time; analyze({ depth }): take this review to a depth
+  async function analyze(opt) {
+    const depth = opt && typeof opt === 'object' && opt.depth ? opt.depth : 0;
+    setDeepTo(depth);
     cancelled.current = false;
     pause(); // the background queue steps aside; this game is next for it anyway
     setProg({ done: 0, total: rep.fens.length });
-    await analyzeGame(id, { ms: typeof ms === 'number' ? ms : prefs.analysisTime, onProgress: (done, total) => setProg({ done, total }), isCancelled: () => cancelled.current });
+    await analyzeGame(id, { ms: prefs.analysisTime, depth, onProgress: (done, total) => setProg({ done, total }), isCancelled: () => cancelled.current });
     setProg(null);
   }
   useEffect(() => {
@@ -361,7 +365,7 @@ function GameReview({ id, auto, startPly = null }) {
         <div className="panel panel-pad space-y-2">
           <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white flex items-center gap-2"><Spinner size={14} /> Stockfish is reviewing the game</span><span className="num text-ink-300">{prog.done}/{prog.total}</span></div>
           <Progress value={(prog.done / prog.total) * 100} />
-          <div className="text-xs text-ink-400">{(prefs.analysisTime / 1000).toFixed(1)} s per position, two lines each. You can leave; it continues where it stopped.</div>
+          <div className="text-xs text-ink-400">{deepTo ? `Every position to depth ${deepTo}` : `${(prefs.analysisTime / 1000).toFixed(1)} s per position`}, two lines each. You can leave; it continues where it stopped.</div>
           <EngineLine est={est} stuck={stuck} onRetry={() => { cancelled.current = true; engine.cancel(['review']); setTimeout(() => analyze(), 300); }} onLite={() => { setPrefs({ engine: 'lite' }); location.reload(); }} />
         </div>
       ) : !full && queued ? (
@@ -391,7 +395,7 @@ function GameReview({ id, auto, startPly = null }) {
           );
           if (cur === 0) return (
             <>
-              <Summary game={game} sum={sum} phases={phases} />
+              <Summary game={game} sum={sum} phases={phases} deepening={queued?.deep ? queued : null} />
               {len > 0 && <button className="btn btn-primary btn-block btn-lg" onClick={() => jump(1)}>Start review ▶</button>}
               {keyMoments.length > 0 && (
                 <div className="panel panel-pad">
@@ -473,9 +477,11 @@ function GameReview({ id, auto, startPly = null }) {
             <a href="#/review" className="btn btn-quiet btn-sm">← All games</a>
             <div className="flex gap-1">
               {full && <button className="btn btn-quiet btn-sm" onClick={() => analyze()} disabled={!!prog}>Re-analyze</button>}
-              {full && (() => { const cur = game.review?.ms || 0; const next = REVIEW_STEPS.find(x => x > cur); if (!next) return null;
-                const mins = Math.max(1, Math.round((fens.length * next) / 60000));
-                return <button className="btn btn-quiet btn-sm" onClick={() => analyze(next)} disabled={!!prog} title={`${(next / 1000).toFixed(1)} s per position instead of ${(cur / 1000).toFixed(1)}`}>Review deeper (about {mins} min)</button>; })()}
+              {full && game.review.flavor?.startsWith('full') && (() => {
+                const have = Math.max(game.review.depth || 0, reviewDepth(game) || 0);
+                const want = needsDeepening(game, prefs.reviewDeep || 21) ? (prefs.reviewDeep || 21) : Math.min(27, have + 2);
+                if (want <= have) return null;
+                return <button className="btn btn-quiet btn-sm" onClick={() => analyze({ depth: want })} disabled={!!prog} title={`Search every position to depth ${want} (it reached ${have}). The report stays as it is until the deeper one is ready.`}>Deepen to depth {want}</button>; })()}
               <button className="btn btn-quiet btn-sm !text-rose-300" onClick={() => setConfirmDel(true)} disabled={!!prog}>Delete</button>
             </div>
           </div>
@@ -505,7 +511,7 @@ function Strip({ game, color, sum }) {
   );
 }
 
-function Summary({ game, sum, phases }) {
+function Summary({ game, sum, phases, deepening }) {
   const rows = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
   const eng = reviewEngine(game);
   const est = gameRatings(game);
@@ -545,6 +551,7 @@ function Summary({ game, sum, phases }) {
         </div>
       )}
       {sum.opening && <div className="text-xs text-ink-300 mt-3 text-center">{sum.opening.eco} · {sum.opening.name}</div>}
+      {deepening && <div className="text-xs text-ink-400 mt-2 text-center flex items-center justify-center gap-2"><Spinner size={12} /> Going deeper in the background: depth {deepening.deep}, {deepening.done} of {deepening.total} positions</div>}
     </div>
   );
 }

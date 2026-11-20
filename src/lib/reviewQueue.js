@@ -16,7 +16,7 @@ import { load, save, KEYS } from './store.js';
 import { getGame, allGames, subscribeGames } from './games.js';
 import { getPrefs } from './prefs.js';
 import { engine } from '../engine/engine.js';
-import { analyzeGame } from './analyze.js';
+import { analyzeGame, needsDeepening } from './analyze.js';
 
 let state = load(KEYS.reviewQueue, { items: [] });
 if (!Array.isArray(state.items)) state = { items: [] };
@@ -79,6 +79,10 @@ export function enqueueUnreviewed({ front = false, limit = 200 } = {}) {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+/** How many of your most recent games the background deepening looks after. */
+const DEEPEN_RECENT = 40;
+const deepFailed = new Set();
+let stopDeep = false;
 const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
 
 // keep the screen on while reviewing, if the user asked for it (Settings)
@@ -102,6 +106,29 @@ export async function run() {
   persist();
   for (;;) {
     const next = state.items.find(x => x.state === 'queued');
+    // nothing waiting for a first review: go back over your recent games and take each to the
+    // depth asked for in Settings, newest first. The quick review stays up until the deep one is done.
+    if (!next && visible() && !stopDeep) {
+      const want = getPrefs().reviewDeep || 0;
+      const g = want && getPrefs().engine === 'full' ? allGames().filter(x => x.you).slice(0, DEEPEN_RECENT).find(x => needsDeepening(x, want) && !deepFailed.has(x.id)) : null;
+      if (g) {
+        if (engine.busyWith('review')) { await sleep(2000); continue; }
+        if (!(await engine.whenFull())) { await sleep(20000); continue; }
+        holdScreen(true);
+        stopFlag = false;
+        progress = { id: g.id, done: 0, total: g.uci.length + 1, deep: want }; emit();
+        let res = null;
+        try {
+          res = await analyzeGame(g.id, { depth: want, priority: 'low', tag: 'review-queue',
+            onProgress: (done, total) => { progress = { id: g.id, done, total, deep: want }; emit(); },
+            isCancelled: () => stopFlag || !visible() || !!state.items.find(x => x.state === 'queued') });
+        } catch { res = null; }
+        progress = null; emit();
+        if (!res && !stopFlag && visible() && !state.items.find(x => x.state === 'queued')) deepFailed.add(g.id); // lite engine or a broken game: not again this session
+        if (!res) await sleep(1500);
+        continue;
+      }
+    }
     if (!next || !visible()) { holdScreen(false); await new Promise((r) => { wake = r; waiting = setTimeout(r, 30000); }); clearTimeout(waiting); continue; }
     const game = getGame(next.id);
     if (!game) { remove(next.id); continue; }

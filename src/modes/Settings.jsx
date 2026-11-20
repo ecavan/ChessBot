@@ -106,9 +106,12 @@ export default function Settings() {
           once the full one is downloaded; after that it works offline. Switching to lite takes effect on the next launch.
         </p>
         <div>
-          <div className="text-sm font-semibold text-white mb-2">Game review depth</div>
+          <div className="text-sm font-semibold text-white mb-2">Game review: first pass</div>
           <Seg value={prefs.analysisTime} onChange={(v) => setPrefs({ analysisTime: v })} options={[[400, 'Fast'], [800, 'Standard'], [1600, 'Deep'], [3000, 'Deeper'], [8000, 'Max']]} />
-          <p className="text-xs text-ink-400 mt-1.5">Time per position: 0.4, 0.8, 1.6, 3 and 8 seconds. Standard reviews a 40-move game in about a minute and Max in about ten; each doubling of the time buys roughly one more move of depth. The depth a review reached is shown on its report, and any game can be reviewed again deeper from there.</p>
+          <p className="text-xs text-ink-400 mt-1.5">Time per position (0.4 to 8 seconds). Standard has a 40-move game's report ready in about a minute, at around depth 17.</p>
+          <div className="text-sm font-semibold text-white mb-2 mt-4">Then go deeper, in the background</div>
+          <Seg value={prefs.reviewDeep ?? 21} onChange={(v) => setPrefs({ reviewDeep: v })} options={[[0, 'Off'], [19, 'Depth 19'], [21, 'Depth 21'], [23, 'Depth 23'], [25, 'Depth 25']]} />
+          <p className="text-xs text-ink-400 mt-1.5">Once the first pass is done, the app goes back over your 40 most recent games, newest first, and searches every position to this depth while it is open: while you play, solve puzzles or read a report. The report you have stays up and is replaced when the deeper one is ready. Each two of depth roughly triples the work; depth 21 is a few minutes a game, depth 25 can be half an hour. It stops when the app is closed or the screen locks, and carries on from where it was.</p>
         </div>
       </section>
 
@@ -131,7 +134,7 @@ export default function Settings() {
           </div>
           <p className="text-xs text-ink-400 mt-1.5">Bullet games teach little in review; rapid is where the lessons apply.</p>
         </div>
-        <Toggle on={prefs.wakeLock} onChange={(v) => setPrefs({ wakeLock: v })} label="Keep the screen on while reviewing" sub="For a long queue: the iPad won't sleep until the reviews are done." />
+        <Toggle on={prefs.wakeLock} onChange={(v) => setPrefs({ wakeLock: v })} label="Keep the screen on while reviewing" sub="Leave the iPad open on a charger and it works through the queue and the deeper pass, then lets the screen sleep." />
         <div className="flex gap-2 flex-wrap items-center">
           <button className="btn btn-sm" disabled={!prefs.chesscom || syncBusy} onClick={async () => { setSyncBusy(true); const r = await sync({ manual: true }); setSyncBusy(false); setMsg(r.error ? `Sync: ${r.error}` : `Sync: ${r.added} new game${r.added === 1 ? '' : 's'}.`); }}>{syncBusy ? <Spinner size={12} /> : null}Sync now</button>
           <button className="btn btn-sm btn-quiet" onClick={() => { resetSync(); setMsg('Sync will start over from this month next time.'); }}>Start sync over</button>

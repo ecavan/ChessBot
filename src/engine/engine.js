@@ -336,7 +336,8 @@ class EngineManager {
     const done = w.waitFor(l => l.startsWith('bestmove') || l.startsWith('__error__'), (job.movetime || 60000) + 120000);
     if (job.newGame) w.send('ucinewgame');
     w.send(`position fen ${job.fen}${job.moves?.length ? ` moves ${job.moves.join(' ')}` : ''}`);
-    const go = job.depth ? `depth ${job.depth}` : job.nodes ? `nodes ${job.nodes}` : `movetime ${job.movetime || 1000}`;
+    // a depth with a movetime is a depth with a time cap: whichever comes first
+    const go = job.depth ? `depth ${job.depth}${job.movetime ? ` movetime ${job.movetime}` : ''}` : job.nodes ? `nodes ${job.nodes}` : `movetime ${job.movetime || 1000}`;
     w.send(`go ${go}`);
     let res = null;
     let crashed = null;

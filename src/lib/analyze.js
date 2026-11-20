@@ -25,25 +25,40 @@ function terminalOf(fen) {
 
 const slim = (l) => ({ ...(l.cp != null ? { cp: l.cp } : {}), ...(l.mate != null ? { mate: l.mate } : {}), depth: l.depth, pv: (l.pv || []).slice(0, 12) });
 
+/** The longest one position may take when a review searches to a depth (ms). */
+export const DEPTH_CAP_MS = 20000;
+
 /**
  * Analyze a stored game. opts: { ms, onProgress(done, total), isCancelled() }.
  * Resolves the updated game (with .review) or null if cancelled.
+ *
+ * With `depth`, every position is searched to that depth (at most DEPTH_CAP_MS each) instead of
+ * for `ms`, and the game's existing review stays in place until the deeper one is complete:
+ * progress is kept beside it (review.deep) so it resumes, positions the existing review already
+ * has at that depth are kept, and it stops rather than replace a full-network review with a
+ * lite one.
  */
-export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = () => false, priority, tag = 'review' } = {}) {
+export async function analyzeGame(gameId, { ms = 800, depth = 0, onProgress, isCancelled = () => false, priority, tag = 'review' } = {}) {
   await loadBook();
   let game = getGame(gameId);
   if (!game) return null;
   const { fens } = replay(game);
-  const prev = game.review?.partial && game.review.ms === ms ? game.review.positions : null;
+  const deepen = depth > 0 && !!game.review?.summary;
+  const prev = deepen ? (game.review.deep?.depth === depth ? game.review.deep.positions : null)
+    : game.review?.partial && game.review.ms === ms && !depth ? game.review.positions : null;
   const positions = prev && prev.length === fens.length ? [...prev] : Array(fens.length).fill(null);
+  // what the existing review already has at this depth (or ended by mate) need not be searched again
+  if (deepen) game.review.positions.forEach((p, i) => { if (!positions[i] && p && (p.terminal != null || (p.lines?.[0]?.depth ?? 0) >= depth || p.lines?.[0]?.mate != null)) positions[i] = p; });
   const total = fens.length;
   let done = positions.filter(Boolean).length;
   onProgress?.(done, total);
   let lastSave = Date.now();
   const flavors = new Set(game.review?.partial ? game.review.flavors || [] : []);
   const persistPartial = () => {
-    if (!getGame(gameId)) return;
-    game = { ...getGame(gameId), review: { ms, positions, partial: true, flavors: [...flavors] } };
+    const cur = getGame(gameId);
+    if (!cur) return;
+    game = deepen ? { ...cur, review: { ...cur.review, deep: { depth, positions } } }
+      : { ...cur, review: { ms, positions, partial: true, flavors: [...flavors] } };
     saveGame(game);
     lastSave = Date.now();
   };
@@ -55,13 +70,14 @@ export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = 
     else {
       let r;
       for (;;) {
-        r = await engine.search({ fen: fens[i], movetime: ms, multipv: 2, tag, priority });
+        r = await engine.search({ fen: fens[i], ...(depth ? { depth, movetime: DEPTH_CAP_MS } : { movetime: ms }), multipv: 2, tag, priority });
         if (!r || isCancelled()) { persistPartial(); return null; }
         if (!r.yielded) break;
         // a background review stepped aside for a live search: let that finish, then search again
         await engine.whenIdle();
         if (isCancelled()) { persistPartial(); return null; }
       }
+      if (deepen && r.flavor?.startsWith('lite')) { persistPartial(); return null; } // never swap a full review for a lite one
       positions[i] = { lines: r.lines.slice(0, 2).map(slim) };
       if (r.flavor) flavors.add(r.flavor);
     }
@@ -74,7 +90,7 @@ export async function analyzeGame(gameId, { ms = 800, onProgress, isCancelled = 
   const fl = [...flavors];
   // the weakest network that took part is what the review is worth
   const flavor = fl.some(f => f.startsWith('lite')) ? fl.find(f => f.startsWith('lite')) : fl[0] || engine.status.flavor;
-  const review = { ms, positions, flavor, at: Date.now() };
+  const review = { ms: depth ? game.review?.ms ?? ms : ms, ...(depth ? { depth } : {}), positions, flavor: deepen ? game.review.flavor : flavor, at: Date.now() };
   review.summary = summarize(getGame(gameId), review);
   game = { ...getGame(gameId), review };
   saveGame(game);
@@ -132,6 +148,14 @@ export function gameRatings(game) {
   return { w: one('w'), b: one('b') };
 }
 
+/** The depth a review reached: the median over its positions (each stores the depth of its first line). */
+export function reviewDepth(game) {
+  const ds = (game?.review?.positions || []).map(p => p?.lines?.[0]?.depth).filter(d => d > 0).sort((a, b) => a - b);
+  return ds.length ? ds[ds.length >> 1] : null;
+}
+/** Is this reviewed game still short of `depth`? (A review searched to a depth records it.) */
+export const needsDeepening = (game, depth) => depth > 0 && !!game?.review?.summary && !game.review.partial && game.review.flavor?.startsWith('full') && (game.review.depth ?? 0) < depth && (reviewDepth(game) ?? 0) < depth;
+
 /** The time-per-position steps of a review, in ms (Settings shows them by name). */
 export const REVIEW_STEPS = [400, 800, 1600, 3000, 8000];
 
@@ -140,9 +164,7 @@ export function reviewEngine(game) {
   const r = game?.review;
   if (!r?.summary) return null;
   const flavor = r.summary.engine?.flavor || r.flavor || null;
-  // the depth the review reached: the median over its positions (each stores the depth of its first line)
-  const ds = (r.positions || []).map(p => p?.lines?.[0]?.depth).filter(d => d > 0).sort((a, b) => a - b);
-  return { flavor, full: !!flavor?.startsWith('full'), ms: r.summary.engine?.ms ?? r.ms, threads: r.summary.engine?.threads, depth: ds.length ? ds[ds.length >> 1] : null };
+  return { flavor, full: !!flavor?.startsWith('full'), ms: r.summary.engine?.ms ?? r.ms, threads: r.summary.engine?.threads, depth: reviewDepth(game) };
 }
 
 /** Classify moves of an analyzed game. */
