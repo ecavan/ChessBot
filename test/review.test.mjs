@@ -48,6 +48,32 @@ const check = (name, cond, got) => { if (!cond) { fails++; console.log('FAIL', n
   check('more accurate rates higher', gameRating(85, 70, 60) > gameRating(60, 70, 60), [gameRating(85, 70, 60), gameRating(60, 70, 60)]);
   check('no accuracy → null', gameRating(null, 70, 60) === null, null);
 }
+// --- your rating against the bots
+{
+  const { expectedScore, kFactor, preview } = await import('../src/lib/ladder.js');
+  check('even match → 50%', Math.abs(expectedScore(800, 800) - 0.5) < 1e-9, expectedScore(800, 800));
+  const first = preview(null, 600, 1);
+  check('the first game starts at the bot\'s rating', first.before === 600 && first.after === 620, first);
+  const st = { rating: 600, n: 12 };
+  const up = preview(st, 1000, 1), easy = preview(st, 300, 1), bad = preview(st, 300, 0);
+  check('beating a stronger bot is worth more', up.delta > easy.delta && easy.delta >= 0, { up: up.delta, easy: easy.delta });
+  check('losing to a weaker bot costs more than beating it gains', -bad.delta > easy.delta, { bad: bad.delta, easy: easy.delta });
+  check('K steps down 40 → 24 → 16', kFactor(0) === 40 && kFactor(10) === 24 && kFactor(30) === 16, null);
+  check('never under 100', preview({ rating: 100, n: 50 }, 200, 0).after >= 100, null);
+}
+
+// --- phases
+{
+  const { phaseAccuracy, phaseGrade } = await import('../src/lib/review.js');
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  const fens = [], cls = [];
+  for (let i = 0; i < 12; i++) { fens.push(`${start} ${i % 2 ? 'b' : 'w'} KQkq - 0 ${1 + (i >> 1)}`); cls.push({ acc: i % 2 ? 50 : 95 }); }
+  const ph = phaseAccuracy(cls, fens);
+  check('opening accuracy per side', ph.opening.w.n === 6 && ph.opening.w.acc > 90 && ph.opening.b.acc < 55, ph.opening);
+  check('a phase nobody reached is null', ph.endgame.w === null && ph.middlegame.b === null, ph);
+  check('grades read as move classes', phaseGrade(95) === 'best' && phaseGrade(60) === 'inaccuracy' && phaseGrade(20) === 'blunder', null);
+}
+
 // --- level with its uncertainty
 {
   const s = levelStats([600, 800, 1000, 700, 900, 650, 850, 750, 950, 800]);

@@ -7,6 +7,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, PlayerStrip, EvalBar, MoveList, Toggle, Seg, Sheet, Spinner, fmtScore } from '../ui/kit.jsx';
 import { HUMAN_BOTS, ENGINE_BOTS, botById, botMove } from '../engine/bots.js';
+import { ladder, rateGame, preview } from '../lib/ladder.js';
 import { engine } from '../engine/engine.js';
 import { useLiveEval } from '../engine/useEngine.js';
 import { usePrefs } from '../lib/prefs.js';
@@ -114,6 +115,9 @@ function PlaySetup({ query }) {
           <button className="btn btn-primary btn-lg btn-block" onClick={start}>
             {inProgress && !fromFen ? 'New game' : 'Start game'}
           </button>
+          {(() => { const st = ladder(); const b = botById(botId); const e = b.max ? 3200 : b.elo; const w = preview(st, e, 1), l = preview(st, e, 0);
+            return <div className="text-sm text-ink-200 text-center">{st ? <>Your rating <b className="num text-white">{st.rating}</b> <span className="text-ink-400">· {st.n} game{st.n === 1 ? '' : 's'} · peak {st.peak}</span><br /></> : <>Your rating starts at this bot's: <b className="num text-white">{e}</b>.<br /></>}
+              <span className="text-xs text-ink-400">Against {b.name}: a win <b className="text-emerald-300 num">+{w.delta}</b>, a loss <b className="text-rose-300 num">{l.delta}</b>. Hints, takebacks and the blunder check's warning make a game unrated.</span></div>; })()}
           <p className="text-xs text-ink-400 leading-relaxed">
             The ratings are measured: the bots played each other, and their games were reviewed next to real chess.com games at each rating.
           </p>
@@ -211,7 +215,13 @@ function PlayGame() {
     recordPlayed({ id: c.id, source: 'bot', you: c.you, white: c.you === 'w' ? 'You' : b.name, black: c.you === 'b' ? 'You' : b.name,
       whiteElo: c.you === 'b' && !b.max ? b.elo : undefined, blackElo: c.you === 'w' && !b.max ? b.elo : undefined,
       startFen: c.startFen, moves: mv, result, how });
-    const n = { ...c, over: { result, how } };
+    // your rating against the bots: rated unless you had help
+    const score = result === '1/2-1/2' ? 0.5 : (result === '1-0') === (c.you === 'w') ? 1 : 0;
+    const helped = c.hints ? 'a hint' : c.takebacks ? 'a takeback' : c.saves ? "the blunder check's warning" : null;
+    const short = c.uci.length < 4 ? 'the game was too short' : null;
+    const botElo = b.max ? 3200 : b.elo;
+    const rated = helped || short ? { unrated: helped ? `you used ${helped}` : short } : rateGame({ id: c.id, bot: b.name, botElo, score });
+    const n = { ...c, over: { result, how, rated } };
     save(CUR, n);
     setCur(n);
     sfx.end();
@@ -396,6 +406,9 @@ function PlayGame() {
         <div className={`verdict ${youWon ? 'v-good' : over.result === '1/2-1/2' ? 'v-info' : 'v-bad'} fade-up`}>
           <div className="text-lg font-semibold text-white">{youWon ? 'You won' : over.result === '1/2-1/2' ? 'Draw' : 'You lost'}</div>
           <div className="text-sm text-ink-200">{over.how}{cur.hints ? ` · ${cur.hints} hint${cur.hints > 1 ? 's' : ''}` : ''}{cur.takebacks ? ` · ${cur.takebacks} takeback${cur.takebacks > 1 ? 's' : ''}` : ''}</div>
+          {over.rated && (over.rated.unrated
+            ? <div className="text-xs text-ink-400 mt-1">Not rated: {over.rated.unrated}.</div>
+            : <div className="text-sm mt-1"><span className="text-ink-300">Your rating</span> <b className="num text-white">{over.rated.before} → {over.rated.after}</b> <span className={`num font-semibold ${over.rated.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{over.rated.delta >= 0 ? '+' : ''}{over.rated.delta}</span></div>)}
           <div className="grid grid-cols-3 gap-2 mt-3">
             <a className="btn btn-primary col-span-3" href={href(`/review/game/${cur.id}`, { analyze: 1 })}>Review this game</a>
             <button className="btn" onClick={() => { epoch.current++; save(CUR, { id: newId(), botId: cur.botId, you: cur.you === 'w' ? 'b' : 'w', startFen: cur.startFen, uci: [], hints: 0, takebacks: 0, over: null }); setCur(load(CUR, null)); nav.setView(null); }}>Rematch</button>
@@ -409,7 +422,7 @@ function PlayGame() {
           <div className="font-semibold text-white">Are you sure?</div>
           <div className="text-sm text-ink-200 mt-0.5">That move drops your winning chances from {Math.round(pending.wb)}% to {Math.round(pending.wa)}%.</div>
           <div className="grid grid-cols-2 gap-2 mt-3">
-            <button className="btn btn-primary" onClick={() => { epoch.current++; setPending(null); setCoachCard(null); setWalk(null); }}>Take it back</button>
+            <button className="btn btn-primary" onClick={() => { epoch.current++; setPending(null); setCoachCard(null); setWalk(null); update({ saves: (curRef.current?.saves || 0) + 1 }); }}>Take it back</button>
             <button className="btn" onClick={() => { const u = pending.uci; setPending(null); if (cur.uci.length === moves.length - 1) update({ uci: [...cur.uci, u] }); }}>Play it</button>
           </div>
         </div>

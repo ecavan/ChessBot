@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { allGames, subscribeGames, resultFor, timeSpent } from '../lib/games.js';
 import { classified, gameRatings } from '../lib/analyze.js';
 import { ccLevel } from '../lib/sync.js';
+import { ladder } from '../lib/ladder.js';
 import { phaseOf, levelFrom, levelStats, CLASSES } from '../lib/review.js';
 import QueueCard from './QueueCard.jsx';
 import { href } from '../lib/router.js';
@@ -117,8 +118,9 @@ export default function Insights() {
         <div className="panel panel-pad text-center muted">{ready ? 'Review a few of your games to see insights here.' : <Spinner />}</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Stat k="Your level" v={level != null ? `${level} ± ${lv.se}` : '–'} s={level != null ? `game ratings, last ${recent.length} full reviews${cc ? ` · chess.com ${cc.cls} ${cc.rating}` : ''}${stats.lite ? ` · ${stats.lite} lite skipped` : ''}` : stats.lite && stats.n >= 3 ? 'needs full-engine reviews' : 'review 3 or more games'} />
+            {(() => { const st = ladder(); return st ? <Stat k="Bot rating" v={`${st.rating}`} s={`${st.n} rated game${st.n === 1 ? '' : 's'} against the bots · peak ${st.peak}`} /> : null; })()}
             <Stat k="Accuracy" v={allAvg?.toFixed(1)} s={last10 != null ? `last 10: ${last10.toFixed(1)}` : null} />
             <Stat k="Blunders / game" v={(stats.blunders / stats.n).toFixed(1)} s={`mistakes ${(stats.mistakes / stats.n).toFixed(1)}`} />
             <Stat k="Record (W-D-L)" v={`${stats.byColor.w.win + stats.byColor.b.win}-${stats.byColor.w.draw + stats.byColor.b.draw}-${stats.byColor.w.loss + stats.byColor.b.loss}`} s={`White ${stats.byColor.w.win}-${stats.byColor.w.draw}-${stats.byColor.w.loss} · Black ${stats.byColor.b.win}-${stats.byColor.b.draw}-${stats.byColor.b.loss}`} />

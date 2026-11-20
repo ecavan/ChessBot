@@ -214,6 +214,23 @@ export function counts(classified, color, firstColor) {
   return c;
 }
 
+/**
+ * How each side played each phase: { opening, middlegame, endgame } → { w, b } with { acc, n, grade },
+ * or null for a side with fewer than 2 moves in that phase. The accuracy is the game accuracy's own
+ * mean, over that phase's moves; the grade is the move class that accuracy reads as.
+ */
+export const PHASES = ['opening', 'middlegame', 'endgame'];
+export const phaseGrade = (acc) => (acc >= 90 ? 'best' : acc >= 80 ? 'excellent' : acc >= 70 ? 'good' : acc >= 55 ? 'inaccuracy' : acc >= 40 ? 'mistake' : 'blunder');
+export function phaseAccuracy(classified, fens) {
+  const out = Object.fromEntries(PHASES.map(p => [p, { w: [], b: [] }]));
+  classified.forEach((c, i) => {
+    const [, side, , , , full] = fens[i].split(' ');
+    out[phaseOf(fens[i], (Number(full) - 1) * 2 + (side === 'b' ? 1 : 0))][side].push(Math.max(1, c.acc));
+  });
+  const mean = (a) => (a.length < 2 ? null : (() => { const acc = Math.round(((a.reduce((s, x) => s + x ** ACC.q, 0) / a.length) ** (1 / ACC.q)) * 10) / 10; return { acc, n: a.length, grade: phaseGrade(acc) }; })());
+  return Object.fromEntries(PHASES.map(p => [p, { w: mean(out[p].w), b: mean(out[p].b) }]));
+}
+
 /** Game phase of a position for insights: opening (≤ move 10 or book), endgame (little material), else middlegame. */
 export function phaseOf(fen, ply) {
   let mat = 0, queens = 0;

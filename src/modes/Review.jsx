@@ -9,7 +9,7 @@ import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, EvalGraph, ClsDot, Progress, Spinner, Seg, Sheet, Stat, fmtScore } from '../ui/kit.jsx';
 import { allGames, subscribeGames, getGame, deleteGame, importPgnText, fetchChessCom, fetchLichess, gamePgn, replay, resultFor } from '../lib/games.js';
 import { analyzeGame, classified, gameRatings } from '../lib/analyze.js';
-import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf } from '../lib/review.js';
+import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf, phaseAccuracy, PHASES } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
 import { explainMove } from '../lib/coach.js';
@@ -248,6 +248,7 @@ function GameReview({ id, auto, startPly = null }) {
   const rep = useMemo(() => (game ? replay(game) : null), [game]);
   const full = !!game?.review?.summary;
   const cls = useMemo(() => (full && bookOk ? classified(game) : full ? classified(game) : null), [game, full, bookOk]);
+  const phases = useMemo(() => { try { return cls ? phaseAccuracy(cls.cls ?? cls, cls.fens ?? replay(game).fens) : null; } catch { return null; } }, [cls, game]);
 
   async function analyze() {
     cancelled.current = false;
@@ -389,7 +390,7 @@ function GameReview({ id, auto, startPly = null }) {
           );
           if (cur === 0) return (
             <>
-              <Summary game={game} sum={sum} />
+              <Summary game={game} sum={sum} phases={phases} />
               {len > 0 && <button className="btn btn-primary btn-block btn-lg" onClick={() => jump(1)}>Start review ▶</button>}
               {keyMoments.length > 0 && (
                 <div className="panel panel-pad">
@@ -500,12 +501,12 @@ function Strip({ game, color, sum }) {
   );
 }
 
-function Summary({ game, sum }) {
+function Summary({ game, sum, phases }) {
   const rows = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
   const eng = reviewEngine(game);
   const est = gameRatings(game);
   return (
-    <div className="panel panel-pad relative">
+    <div className="panel panel-pad relative" style={{ paddingTop: 26 }}>
       {eng && <span className={`absolute top-2 right-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${eng.full ? 'text-ink-400 bg-ink-800/60' : 'text-amber-200 bg-amber-900/40'}`} title={eng.full ? `Full network, ${eng.ms} ms per position` : 'Reviewed with the lite network: the numbers are rough. Re-analyze once the full engine has loaded.'}>{eng.full ? `full · ${eng.ms ? `${(eng.ms / 1000).toFixed(1)} s` : ''}` : 'lite · rough'}</span>}
       <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3 text-center">
         <div><div className="text-[11px] uppercase tracking-wider text-ink-300 truncate">{game.white}</div><div className="text-3xl font-semibold text-white num">{sum.acc.w?.toFixed(1) ?? '–'}</div></div>
@@ -526,6 +527,19 @@ function Summary({ game, sum }) {
           </div>
         ) : null)}
       </div>
+      {phases && PHASES.some(p => phases[p].w || phases[p].b) && (
+        <div className="mt-3 pt-3 border-t border-ink-700/60 space-y-1">
+          {PHASES.map(p => (phases[p].w || phases[p].b) ? (
+            <div key={p} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-sm">
+              {['w', 'b'].map((c, k) => { const x = phases[p][c]; return (
+                <span key={c} className={`flex items-center gap-1.5 ${k ? 'justify-start order-3' : 'justify-end'}`} title={x ? `${x.n} moves` : 'too few moves in this phase'}>
+                  {x ? <><ClsDot cls={x.grade} size={16} /><span className="num font-semibold" style={{ color: CLASSES[x.grade].color }}>{x.acc.toFixed(0)}</span></> : <span className="text-ink-500">–</span>}
+                </span>); })}
+              <span className="w-28 text-center text-ink-200 capitalize order-2">{p}</span>
+            </div>
+          ) : null)}
+        </div>
+      )}
       {sum.opening && <div className="text-xs text-ink-300 mt-3 text-center">{sum.opening.eco} · {sum.opening.name}</div>}
     </div>
   );
