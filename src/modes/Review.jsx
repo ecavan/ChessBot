@@ -8,7 +8,7 @@ import { Chess } from 'chess.js';
 import Board from '../ui/Board.jsx';
 import { Stage, useStage, EvalBar, MoveList, EvalGraph, ClsDot, Progress, Spinner, Seg, Sheet, Stat, fmtScore } from '../ui/kit.jsx';
 import { allGames, subscribeGames, getGame, deleteGame, importPgnText, fetchChessCom, fetchLichess, gamePgn, replay, resultFor } from '../lib/games.js';
-import { analyzeGame, classified, gameRatings } from '../lib/analyze.js';
+import { analyzeGame, classified, gameRatings, REVIEW_STEPS } from '../lib/analyze.js';
 import { CLASSES, CLASS_ORDER, winPct, cpOf, phaseOf, phaseAccuracy, PHASES } from '../lib/review.js';
 import { loadBook, openingOf, bookReady } from '../lib/book.js';
 import { lineSan, uciOf, uciToSan } from '../lib/chessutil.js';
@@ -251,11 +251,11 @@ function GameReview({ id, auto, startPly = null }) {
   const cls = useMemo(() => (full && bookOk ? classified(game) : full ? classified(game) : null), [game, full, bookOk]);
   const phases = useMemo(() => { try { return cls ? phaseAccuracy(cls.cls ?? cls, cls.fens ?? replay(game).fens) : null; } catch { return null; } }, [cls, game]);
 
-  async function analyze() {
+  async function analyze(ms = prefs.analysisTime) {
     cancelled.current = false;
     pause(); // the background queue steps aside; this game is next for it anyway
     setProg({ done: 0, total: rep.fens.length });
-    await analyzeGame(id, { ms: prefs.analysisTime, onProgress: (done, total) => setProg({ done, total }), isCancelled: () => cancelled.current });
+    await analyzeGame(id, { ms: typeof ms === 'number' ? ms : prefs.analysisTime, onProgress: (done, total) => setProg({ done, total }), isCancelled: () => cancelled.current });
     setProg(null);
   }
   useEffect(() => {
@@ -472,7 +472,10 @@ function GameReview({ id, auto, startPly = null }) {
           <div className="flex justify-between">
             <a href="#/review" className="btn btn-quiet btn-sm">← All games</a>
             <div className="flex gap-1">
-              {full && <button className="btn btn-quiet btn-sm" onClick={analyze} disabled={!!prog}>Re-analyze</button>}
+              {full && <button className="btn btn-quiet btn-sm" onClick={() => analyze()} disabled={!!prog}>Re-analyze</button>}
+              {full && (() => { const cur = game.review?.ms || 0; const next = REVIEW_STEPS.find(x => x > cur); if (!next) return null;
+                const mins = Math.max(1, Math.round((fens.length * next) / 60000));
+                return <button className="btn btn-quiet btn-sm" onClick={() => analyze(next)} disabled={!!prog} title={`${(next / 1000).toFixed(1)} s per position instead of ${(cur / 1000).toFixed(1)}`}>Review deeper (about {mins} min)</button>; })()}
               <button className="btn btn-quiet btn-sm !text-rose-300" onClick={() => setConfirmDel(true)} disabled={!!prog}>Delete</button>
             </div>
           </div>
@@ -508,7 +511,7 @@ function Summary({ game, sum, phases }) {
   const est = gameRatings(game);
   return (
     <div className="panel panel-pad relative" style={{ paddingTop: 26 }}>
-      {eng && <span className={`absolute top-2 right-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${eng.full ? 'text-ink-400 bg-ink-800/60' : 'text-amber-200 bg-amber-900/40'}`} title={eng.full ? `Full network, ${eng.ms} ms per position` : 'Reviewed with the lite network: the numbers are rough. Re-analyze once the full engine has loaded.'}>{eng.full ? `full · ${eng.ms ? `${(eng.ms / 1000).toFixed(1)} s` : ''}` : 'lite · rough'}</span>}
+      {eng && <span className={`absolute top-2 right-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${eng.full ? 'text-ink-400 bg-ink-800/60' : 'text-amber-200 bg-amber-900/40'}`} title={eng.full ? `Full network, ${eng.ms} ms per position${eng.depth ? `, reaching depth ${eng.depth} on a typical position` : ''}` : 'Reviewed with the lite network: the numbers are rough. Re-analyze once the full engine has loaded.'}>{eng.full ? `full · ${eng.depth ? `depth ${eng.depth}` : eng.ms ? `${(eng.ms / 1000).toFixed(1)} s` : ''}` : 'lite · rough'}</span>}
       <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3 text-center">
         <div><div className="text-[11px] uppercase tracking-wider text-ink-300 truncate">{game.white}</div><div className="text-3xl font-semibold text-white num">{sum.acc.w?.toFixed(1) ?? '–'}</div></div>
         <div className="text-[11px] uppercase tracking-wider text-ink-400 pb-2">Accuracy</div>

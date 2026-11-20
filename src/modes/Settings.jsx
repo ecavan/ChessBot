@@ -107,8 +107,8 @@ export default function Settings() {
         </p>
         <div>
           <div className="text-sm font-semibold text-white mb-2">Game review depth</div>
-          <Seg value={prefs.analysisTime} onChange={(v) => setPrefs({ analysisTime: v })} options={[[400, 'Fast'], [800, 'Standard'], [1600, 'Deep'], [3000, 'Max']]} />
-          <p className="text-xs text-ink-400 mt-1.5">Time per position. Standard reviews a 40-move game in about a minute.</p>
+          <Seg value={prefs.analysisTime} onChange={(v) => setPrefs({ analysisTime: v })} options={[[400, 'Fast'], [800, 'Standard'], [1600, 'Deep'], [3000, 'Deeper'], [8000, 'Max']]} />
+          <p className="text-xs text-ink-400 mt-1.5">Time per position: 0.4, 0.8, 1.6, 3 and 8 seconds. Standard reviews a 40-move game in about a minute and Max in about ten; each doubling of the time buys roughly one more move of depth. The depth a review reached is shown on its report, and any game can be reviewed again deeper from there.</p>
         </div>
       </section>
 

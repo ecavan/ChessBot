@@ -132,12 +132,17 @@ export function gameRatings(game) {
   return { w: one('w'), b: one('b') };
 }
 
+/** The time-per-position steps of a review, in ms (Settings shows them by name). */
+export const REVIEW_STEPS = [400, 800, 1600, 3000, 8000];
+
 /** Which engine a review was made with: { flavor, full: bool, ms } (full = the complete network). */
 export function reviewEngine(game) {
   const r = game?.review;
   if (!r?.summary) return null;
   const flavor = r.summary.engine?.flavor || r.flavor || null;
-  return { flavor, full: !!flavor?.startsWith('full'), ms: r.summary.engine?.ms ?? r.ms, threads: r.summary.engine?.threads };
+  // the depth the review reached: the median over its positions (each stores the depth of its first line)
+  const ds = (r.positions || []).map(p => p?.lines?.[0]?.depth).filter(d => d > 0).sort((a, b) => a - b);
+  return { flavor, full: !!flavor?.startsWith('full'), ms: r.summary.engine?.ms ?? r.ms, threads: r.summary.engine?.threads, depth: ds.length ? ds[ds.length >> 1] : null };
 }
 
 /** Classify moves of an analyzed game. */
